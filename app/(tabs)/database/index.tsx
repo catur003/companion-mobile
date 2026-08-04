@@ -58,17 +58,6 @@ export default function DatabaseListScreen() {
               </View>
             </Card>
             {companionConfigured.data === true && (
-              <Card onPress={() => router.push('/(tabs)/database/coolify-browse')} style={styles.coolifyLink}>
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>Browse Database Coolify (Beta)</Text>
-                    <Text style={styles.meta}>List tabel & preview - gak perlu ngetik SQL</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
-                </View>
-              </Card>
-            )}
-            {companionConfigured.data === true && (
               <Card onPress={() => router.push('/(tabs)/database/coolify-query')} style={styles.coolifyLink}>
                 <View style={styles.row}>
                   <View style={{ flex: 1 }}>

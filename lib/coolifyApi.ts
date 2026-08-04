@@ -51,35 +51,6 @@ export async function getCoolifyApplication(applicationUuid: string): Promise<Co
   }
 }
 
-/** GET /applications - daftar SEMUA app Coolify (buat picker "Kelola Mapping Project", bukan buat CoolifyAppCard yang butuh 1 app spesifik). */
-export async function listCoolifyApplications(): Promise<CoolifyApplication[]> {
-  const c = await coolifyClient();
-  try {
-    const res = await c.get('/applications');
-    return res.data ?? [];
-  } catch (err) {
-    throw toApiError(err, 'Gagal ambil daftar application dari Coolify.');
-  }
-}
-
-export interface CoolifyDatabaseSummary {
-  uuid: string;
-  name: string;
-  database_type?: string;
-  [key: string]: unknown;
-}
-
-/** GET /databases - daftar SEMUA database Coolify (semua tipe), buat picker. */
-export async function listCoolifyDatabases(): Promise<CoolifyDatabaseSummary[]> {
-  const c = await coolifyClient();
-  try {
-    const res = await c.get('/databases');
-    return res.data ?? [];
-  } catch (err) {
-    throw toApiError(err, 'Gagal ambil daftar database dari Coolify.');
-  }
-}
-
 /**
  * CONFIRMED dari dokumentasi resmi (belum dites ke instance nyata): log
  * RUNTIME container (stdout/stderr app yang lagi jalan), historis - bukan
@@ -95,24 +66,6 @@ export async function getCoolifyApplicationLogs(applicationUuid: string, lines =
     return res.data?.logs ?? '';
   } catch (err) {
     throw toApiError(err, 'Gagal ambil log aplikasi dari Coolify.');
-  }
-}
-
-export interface CoolifyEnv {
-  uuid?: string;
-  key: string;
-  value: string;
-  [key: string]: unknown;
-}
-
-/** GET /applications/{uuid}/envs - belum divalidasi field exact-nya (dokumentasi cuma bilang "all environment variables", gak kasih schema detail), tapi "key"/"value" cukup pasti karena konsisten sama bulk update yang udah confirmed. */
-export async function getCoolifyApplicationEnvs(applicationUuid: string): Promise<CoolifyEnv[]> {
-  const c = await coolifyClient();
-  try {
-    const res = await c.get(`/applications/${encodeURIComponent(applicationUuid)}/envs`);
-    return res.data ?? [];
-  } catch (err) {
-    throw toApiError(err, 'Gagal ambil environment variables dari Coolify.');
   }
 }
 
@@ -167,11 +120,10 @@ export async function stopCoolifyApplication(applicationUuid: string): Promise<v
   }
 }
 
-export async function restartCoolifyApplication(applicationUuid: string): Promise<{ deployment_uuid?: string }> {
+export async function restartCoolifyApplication(applicationUuid: string): Promise<void> {
   const c = await coolifyClient();
   try {
-    const res = await c.post(`/applications/${encodeURIComponent(applicationUuid)}/restart`);
-    return res.data ?? {};
+    await c.post(`/applications/${encodeURIComponent(applicationUuid)}/restart`);
   } catch (err) {
     throw toApiError(err, 'Gagal restart aplikasi di Coolify.');
   }
