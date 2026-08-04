@@ -87,7 +87,40 @@ export default function JobsScreen() {
                 <View style={styles.row}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.type}>COOLIFY</Text>
-                    <Text style={styles.name}>File Viewer PORTOFOLIO (Beta)</Text>
+                    <Text style={styles.name}>File Viewer (Beta)</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+                </View>
+              </Card>
+            )}
+            {coolifyConfigured.data === true && (
+              <Card onPress={() => router.push('/(tabs)/deploy/coolify-env')} style={styles.coolifyLink}>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.type}>COOLIFY</Text>
+                    <Text style={styles.name}>Env Vars (Beta)</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+                </View>
+              </Card>
+            )}
+            {companionConfigured.data === true && coolifyConfigured.data === true && (
+              <Card onPress={() => router.push('/(tabs)/deploy/coolify-projects')} style={styles.coolifyLink}>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.type}>COOLIFY</Text>
+                    <Text style={styles.name}>Kelola Mapping Project (Beta)</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+                </View>
+              </Card>
+            )}
+            {companionConfigured.data === true && (
+              <Card onPress={() => router.push('/(tabs)/deploy/coolify-migrate')} style={styles.coolifyLink}>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.type}>COOLIFY</Text>
+                    <Text style={styles.name}>DB Push / Seed (Beta)</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
                 </View>
