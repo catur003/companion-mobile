@@ -1,37 +1,33 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable, FlatList } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { colors, spacing, radius } from '@/lib/theme';
-import { getCoolifyApplicationLogs, getCoolifyDeployment } from '@/lib/coolifyApi';
+import {
+  getCoolifyApplicationLogs,
+  findActiveDeploymentForApp,
+  getDeploymentDetail,
+  DeploymentLogStep,
+} from '@/lib/coolifyApi';
 import { listRegisteredProjects } from '@/lib/companionApi';
 import { ApiError } from '@/lib/api';
 
-/**
- * Coba beberapa kemungkinan nama field log dari response deployment mentah -
- * struktur exact-nya belum confirmed (lihat catatan di getCoolifyDeployment,
- * coolifyApi.ts). Fallback ke JSON.stringify kalau gak ketemu field yang
- * jelas isinya log text, biar tetep ada info yang ditampilin daripada kosong.
- */
-function extractDeploymentLogText(data: Record<string, unknown>): string {
-  const candidates = ['logs', 'output', 'log'];
-  for (const key of candidates) {
-    const val = data[key];
-    if (typeof val === 'string' && val.length > 0) return val;
-    if (Array.isArray(val)) return val.map((line) => String(line)).join('\n');
-  }
-  return JSON.stringify(data, null, 2);
-}
+const ACTIVE_STATUSES = ['in_progress', 'queued'];
 
+/**
+ * REDESIGN (5 Agustus 2026) - lihat REALTIME-DEPLOY-LOG.md buat riset
+ * lengkapnya. Ganti total dari pendekatan lama ("cuma kebaca kalau baru
+ * klik Start dari app itu sendiri, session-limited") jadi auto-detect:
+ * cari deployment yang lagi aktif buat app ini lewat daftar umum
+ * (findActiveDeploymentForApp), polling detailnya tiap 2 detik selama
+ * status masih in_progress/queued, render INCREMENTAL (append doang, bukan
+ * re-render semua tiap poll) pakai index posisi array (field "order" yang
+ * diasumsikan draft awal TERNYATA GAK ADA di API beneran).
+ */
 export default function CoolifyLogsScreen() {
-  // Kalau dibuka dari tombol "Log" di CoolifyAppCard, applicationUuid udah
-  // dikirim lewat param - langsung fokus ke project itu tanpa perlu milih.
-  // deploymentUuid CUMA ada kalau dibuka tepat setelah klik Start/Deploy di
-  // session yang sama (lihat CoolifyAppCard.tsx) - belum ada riwayat deploy
-  // lama yang bisa di-browse dari sini.
-  const params = useLocalSearchParams<{ applicationUuid?: string; deploymentUuid?: string }>();
+  const params = useLocalSearchParams<{ applicationUuid?: string }>();
 
   const projectsQuery = useQuery({ queryKey: ['registered-projects'], queryFn: listRegisteredProjects, staleTime: 60000 });
   const projects = projectsQuery.data ?? [];
@@ -43,32 +39,67 @@ export default function CoolifyLogsScreen() {
     projects[0] ??
     null;
 
-  const [activeTab, setActiveTab] = useState<'runtime' | 'build'>(params.deploymentUuid ? 'build' : 'runtime');
-  const [logs, setLogs] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'runtime' | 'build'>('build');
 
+  // ---- Runtime log (stdout/stderr app yang lagi jalan) - gak berubah dari sebelumnya ----
+  const [runtimeLogs, setRuntimeLogs] = useState<string | null>(null);
   const loadRuntimeMutation = useMutation({
     mutationFn: () => {
       if (!selectedProject) throw new ApiError('Pilih project dulu.', 'NO_PROJECT_SELECTED');
       return getCoolifyApplicationLogs(selectedProject.applicationUuid, 300);
     },
-    onSuccess: (res) => setLogs(res),
+    onSuccess: (res) => setRuntimeLogs(res),
     onError: (err) => {
-      setLogs(null);
+      setRuntimeLogs(null);
       Alert.alert('Gagal Ambil Log', err instanceof ApiError ? err.message : 'Terjadi kesalahan.');
     },
   });
 
-  const loadBuildMutation = useMutation({
-    mutationFn: () => {
-      if (!params.deploymentUuid) throw new ApiError('Belum ada deployment yang bisa dilihat log-nya.', 'NO_DEPLOYMENT_UUID');
-      return getCoolifyDeployment(params.deploymentUuid);
-    },
-    onSuccess: (res) => setLogs(extractDeploymentLogText(res)),
-    onError: (err) => {
-      setLogs(null);
-      Alert.alert('Gagal Ambil Log Build', err instanceof ApiError ? err.message : 'Terjadi kesalahan.');
+  // ---- Build log (deploy yang lagi/baru aja jalan) - auto-detect ----
+  // Cari deployment_uuid yang aktif buat app ini, sekali tiap kali app-nya
+  // ganti (bukan di-polling - itu daftar umum, dipanggil sekali doang).
+  const activeDeploymentQuery = useQuery({
+    queryKey: ['active-deployment', selectedProject?.applicationUuid],
+    queryFn: () => findActiveDeploymentForApp(selectedProject!.applicationUuid),
+    enabled: Boolean(selectedProject) && activeTab === 'build',
+    refetchInterval: (query) => (query.state.data ? false : 5000), // kalau belum ketemu, coba lagi tiap 5 detik (mungkin baru mulai deploy)
+  });
+
+  const deploymentUuid = activeDeploymentQuery.data?.deployment_uuid;
+
+  // Ini yang di-POLLING (endpoint spesifik, ringan) - bukan activeDeploymentQuery di atas.
+  const deploymentDetailQuery = useQuery({
+    queryKey: ['deployment-detail', deploymentUuid],
+    queryFn: () => getDeploymentDetail(deploymentUuid!),
+    enabled: Boolean(deploymentUuid),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status && !ACTIVE_STATUSES.includes(status) ? false : 2000;
     },
   });
+
+  // Render incremental - state lokal nyimpen step yang udah "ditampilin",
+  // di-reset tiap kali pindah deploymentUuid (proyek beda / deploy baru).
+  const [displayedSteps, setDisplayedSteps] = useState<DeploymentLogStep[]>([]);
+  const lastIndexRef = useRef(0);
+
+  useEffect(() => {
+    setDisplayedSteps([]);
+    lastIndexRef.current = 0;
+  }, [deploymentUuid]);
+
+  useEffect(() => {
+    const allSteps = deploymentDetailQuery.data?.steps;
+    if (!allSteps) return;
+    if (allSteps.length > lastIndexRef.current) {
+      const newSteps = allSteps.slice(lastIndexRef.current);
+      lastIndexRef.current = allSteps.length;
+      setDisplayedSteps((prev) => [...prev, ...newSteps]);
+    }
+  }, [deploymentDetailQuery.data]);
+
+  const buildStatus = deploymentDetailQuery.data?.status ?? activeDeploymentQuery.data?.status;
+  const isBuildActive = buildStatus ? ACTIVE_STATUSES.includes(buildStatus) : false;
 
   if (projectsQuery.isLoading) {
     return (
@@ -91,29 +122,17 @@ export default function CoolifyLogsScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Card style={styles.introCard}>
-        <Text style={styles.intro}>
-          Beta. "Runtime" - stdout/stderr app yang lagi jalan, historis bukan live-stream. "Build" - log proses
-          install/build deployment terakhir, cuma tersedia kalau dibuka tepat setelah klik Start/Deploy (belum ada
-          riwayat deploy lama yang bisa di-browse dari sini).
-        </Text>
-      </Card>
-
-      <View style={styles.chipRow}>
-        <Pressable onPress={() => setActiveTab('runtime')} style={[styles.chip, activeTab === 'runtime' && styles.chipActive]}>
-          <Text style={[styles.chipText, activeTab === 'runtime' && styles.chipTextActive]}>Runtime</Text>
+    <View style={styles.screen}>
+      <View style={styles.tabRow}>
+        <Pressable onPress={() => setActiveTab('build')} style={[styles.tab, activeTab === 'build' && styles.tabActive]}>
+          <Text style={[styles.tabText, activeTab === 'build' && styles.tabTextActive]}>Build</Text>
         </Pressable>
-        <Pressable
-          onPress={() => setActiveTab('build')}
-          style={[styles.chip, activeTab === 'build' && styles.chipActive, !params.deploymentUuid && { opacity: 0.4 }]}
-          disabled={!params.deploymentUuid}
-        >
-          <Text style={[styles.chipText, activeTab === 'build' && styles.chipTextActive]}>Build</Text>
+        <Pressable onPress={() => setActiveTab('runtime')} style={[styles.tab, activeTab === 'runtime' && styles.tabActive]}>
+          <Text style={[styles.tabText, activeTab === 'runtime' && styles.tabTextActive]}>Runtime</Text>
         </Pressable>
       </View>
 
-      {projects.length > 1 && !params.applicationUuid && activeTab === 'runtime' && (
+      {projects.length > 1 && !params.applicationUuid && (
         <View style={styles.chipRow}>
           {projects.map((p) => (
             <Pressable
@@ -129,25 +148,58 @@ export default function CoolifyLogsScreen() {
         </View>
       )}
 
-      <Card>
-        <Text style={styles.projectLabel}>
-          {activeTab === 'runtime' ? selectedProject?.name ?? '-' : `Deployment: ${params.deploymentUuid?.slice(0, 12) ?? '-'}`}
-        </Text>
-        {activeTab === 'runtime' ? (
-          <Button label="Ambil Log Terbaru" loading={loadRuntimeMutation.isPending} onPress={() => loadRuntimeMutation.mutate()} />
-        ) : (
-          <Button label="Ambil Log Build" loading={loadBuildMutation.isPending} onPress={() => loadBuildMutation.mutate()} />
-        )}
-      </Card>
+      {activeTab === 'build' ? (
+        <>
+          <View style={styles.statusBar}>
+            {isBuildActive && <View style={styles.pulseDot} />}
+            <Text style={styles.statusText}>
+              {activeDeploymentQuery.isLoading
+                ? 'Nyari deployment aktif...'
+                : !deploymentUuid
+                  ? 'Gak ada deploy yang lagi jalan buat project ini.'
+                  : `Status: ${buildStatus} ${isBuildActive ? '(polling tiap 2 detik)' : ''}`}
+            </Text>
+          </View>
 
-      {logs !== null && (
-        <Card>
-          <ScrollView horizontal>
-            <Text style={styles.code}>{logs || '(kosong)'}</Text>
-          </ScrollView>
-        </Card>
+          <FlatList
+            data={displayedSteps}
+            keyExtractor={(_, i) => String(i)}
+            contentContainerStyle={styles.logContent}
+            renderItem={({ item }) => (
+              <Text style={[styles.logLine, item.type === 'stderr' && styles.logLineErr]}>
+                {item.output}
+              </Text>
+            )}
+            ListEmptyComponent={
+              !activeDeploymentQuery.isLoading && !deploymentUuid ? (
+                <Card style={{ margin: spacing.lg }}>
+                  <Text style={styles.mutedText}>
+                    Trigger Start/Deploy/Restart (dari app atau dashboard Coolify) buat lihat log build-nya di sini.
+                  </Text>
+                </Card>
+              ) : null
+            }
+          />
+        </>
+      ) : (
+        <ScrollView contentContainerStyle={styles.content}>
+          <Card style={styles.introCard}>
+            <Text style={styles.intro}>Stdout/stderr app yang lagi jalan, historis - bukan live-stream.</Text>
+          </Card>
+          <Card>
+            <Text style={styles.projectLabel}>{selectedProject?.name ?? '-'}</Text>
+            <Button label="Ambil Log Terbaru" loading={loadRuntimeMutation.isPending} onPress={() => loadRuntimeMutation.mutate()} />
+          </Card>
+          {runtimeLogs !== null && (
+            <Card>
+              <ScrollView horizontal>
+                <Text style={styles.code}>{runtimeLogs || '(kosong)'}</Text>
+              </ScrollView>
+            </Card>
+          )}
+        </ScrollView>
       )}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -159,7 +211,12 @@ const styles = StyleSheet.create({
   mutedText: { fontSize: 13, color: colors.inkMuted },
   projectLabel: { fontSize: 13, fontWeight: '700', color: colors.ink, marginBottom: spacing.sm },
   code: { fontFamily: 'monospace', fontSize: 11, color: colors.ink, lineHeight: 16 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  tabRow: { flexDirection: 'row', backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  tab: { flex: 1, paddingVertical: 13, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: colors.accent },
+  tabText: { fontSize: 12.5, fontWeight: '700', color: colors.inkFaint },
+  tabTextActive: { color: colors.accent },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, padding: spacing.lg, paddingBottom: 0 },
   chip: {
     paddingVertical: 6,
     paddingHorizontal: spacing.md,
@@ -171,4 +228,10 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   chipText: { fontSize: 12.5, fontWeight: '700', color: colors.inkMuted },
   chipTextActive: { color: colors.accent },
+  statusBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.amber },
+  statusText: { fontSize: 12, color: colors.inkMuted, fontWeight: '600' },
+  logContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
+  logLine: { fontFamily: 'monospace', fontSize: 11, color: colors.ink, lineHeight: 16 },
+  logLineErr: { color: colors.red },
 });

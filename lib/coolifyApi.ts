@@ -88,6 +88,92 @@ export async function listCoolifyDatabases(): Promise<CoolifyDatabaseSummary[]> 
  * /deployments juga, belum di-wire di sini - baru runtime logs dulu, itu
  * yang paling sering dibutuhin buat debug app yang lagi jalan).
  */
+export interface CoolifyDeploymentSummary {
+  deployment_uuid: string;
+  application_uuid: string | null; // extracted dari deployment_url, BUKAN field application_uuid asli (itu selalu null - lihat REALTIME-DEPLOY-LOG.md 3.4a)
+  application_name: string;
+  status: string;
+  deployment_url: string;
+}
+
+/**
+ * CONFIRMED via curl langsung ke instance produksi (5 Agustus 2026, lihat
+ * REALTIME-DEPLOY-LOG.md Bagian 3.4a) - GET /deployments balikin ARRAY
+ * LANGSUNG (bukan {data:[...]}). Field "application_id" itu ID numerik
+ * internal, BUKAN applicationUuid - dan field "application_uuid" SELALU
+ * null. Satu-satunya cara reliable dapetin applicationUuid: extract dari
+ * path "deployment_url" (".../application/{uuid}/deployment/...").
+ */
+function extractApplicationUuidFromDeploymentUrl(url: string): string | null {
+  const match = url.match(/\/application\/([a-z0-9]+)\/deployment\//i);
+  return match ? match[1] : null;
+}
+
+export async function listActiveDeployments(): Promise<CoolifyDeploymentSummary[]> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get('/deployments');
+    const raw = Array.isArray(res.data) ? res.data : [];
+    return raw.map((d: Record<string, unknown>) => ({
+      deployment_uuid: String(d.deployment_uuid),
+      application_uuid: extractApplicationUuidFromDeploymentUrl(String(d.deployment_url ?? '')),
+      application_name: String(d.application_name ?? ''),
+      status: String(d.status ?? ''),
+      deployment_url: String(d.deployment_url ?? ''),
+    }));
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil daftar deployment dari Coolify.');
+  }
+}
+
+/** Cari deployment yang lagi aktif (in_progress/queued) buat 1 applicationUuid tertentu - dari daftar umum, bukan endpoint per-app (itu balikin kosong di tes nyata, lihat 3.4a). */
+export async function findActiveDeploymentForApp(applicationUuid: string): Promise<CoolifyDeploymentSummary | null> {
+  const all = await listActiveDeployments();
+  return all.find((d) => d.application_uuid === applicationUuid) ?? null;
+}
+
+export interface DeploymentLogStep {
+  command: string | null;
+  output: string;
+  type: 'stdout' | 'stderr';
+  timestamp: string;
+  hidden: boolean;
+  batch: number;
+}
+
+export interface DeploymentDetail {
+  status: string;
+  steps: DeploymentLogStep[];
+}
+
+/**
+ * GET /deployments/{uuid} - endpoint SPESIFIK (1 objek, ringan), ini yang
+ * di-POLLING tiap 1-2 detik, BUKAN listActiveDeployments (itu daftar umum,
+ * cuma dipanggil sekali buat nemuin deployment_uuid yang aktif).
+ *
+ * Field "order" per-step yang diasumsikan draft awal TIDAK ADA (confirmed
+ * via curl) - render incremental pakai posisi index array di layar
+ * pemanggil, bukan field ini.
+ */
+export async function getDeploymentDetail(deploymentUuid: string): Promise<DeploymentDetail> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get(`/deployments/${encodeURIComponent(deploymentUuid)}`);
+    const logsRaw = res.data?.logs;
+    let steps: DeploymentLogStep[] = [];
+    if (typeof logsRaw === 'string') {
+      try {
+        steps = JSON.parse(logsRaw);
+      } catch {
+        steps = [];
+      }
+    }
+    return { status: String(res.data?.status ?? ''), steps };
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil detail deployment dari Coolify.');
+  }
+}
+
 export async function getCoolifyApplicationLogs(applicationUuid: string, lines = 200): Promise<string> {
   const c = await coolifyClient();
   try {
