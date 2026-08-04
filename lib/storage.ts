@@ -123,6 +123,47 @@ export async function isCompanionConfigured(): Promise<boolean> {
 }
 
 /**
+ * Kredensial Coolify API LANGSUNG (Bagian 3.2 dokumen: ZenVPS manggil 2
+ * backend paralel - Companion API buat 4 gap kecil, Coolify API langsung
+ * buat start/stop/restart/status, setara PM2 yang lama). Terpisah lagi dari
+ * dua kredensial di atas - 3 backend independen total.
+ *
+ * Token-nya BOLEH sama persis dengan COOLIFY_API_TOKEN yang udah diisi di
+ * .env Companion API (instance Coolify yang sama) - tapi disimpan terpisah
+ * di HP karena dua konsumen (app HP vs Companion API di VPS) beda siklus
+ * hidup, ganti salah satu gak harus ganti yang lain.
+ */
+const KEY_COOLIFY_BASE_URL = 'zenvps_coolify_base_url';
+const KEY_COOLIFY_TOKEN = 'zenvps_coolify_token';
+
+export async function getCoolifyBaseUrl(): Promise<string | null> {
+  return SecureStore.getItemAsync(KEY_COOLIFY_BASE_URL);
+}
+
+export async function setCoolifyBaseUrl(url: string): Promise<void> {
+  const clean = url.trim().replace(/\/+$/, '');
+  await SecureStore.setItemAsync(KEY_COOLIFY_BASE_URL, clean);
+}
+
+export async function getCoolifyToken(): Promise<string | null> {
+  return SecureStore.getItemAsync(KEY_COOLIFY_TOKEN);
+}
+
+export async function setCoolifyToken(token: string): Promise<void> {
+  await SecureStore.setItemAsync(KEY_COOLIFY_TOKEN, token.trim());
+}
+
+export async function clearCoolifyCredentials(): Promise<void> {
+  await SecureStore.deleteItemAsync(KEY_COOLIFY_BASE_URL);
+  await SecureStore.deleteItemAsync(KEY_COOLIFY_TOKEN);
+}
+
+export async function isCoolifyConfigured(): Promise<boolean> {
+  const [url, token] = await Promise.all([getCoolifyBaseUrl(), getCoolifyToken()]);
+  return Boolean(url && token);
+}
+
+/**
  * Preferensi tema tersimpan (bukan data sensitif) - tetap dilewatkan lewat
  * expo-secure-store daripada nambah dependency AsyncStorage baru cuma buat
  * satu string kecil ini. Kalau gagal baca/tulis (device aneh, dst), caller

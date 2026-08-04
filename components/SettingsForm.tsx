@@ -18,9 +18,17 @@ import {
   setCompanionToken,
   clearCompanionCredentials,
 } from '@/lib/storage';
+import {
+  getCoolifyBaseUrl,
+  getCoolifyToken,
+  setCoolifyBaseUrl,
+  setCoolifyToken,
+  clearCoolifyCredentials,
+} from '@/lib/storage';
 import { useAuth } from '@/lib/AuthContext';
 import { healthCheck } from '@/lib/api';
 import { companionHealthCheck } from '@/lib/companionApi';
+import { coolifyHealthCheck } from '@/lib/coolifyApi';
 
 interface ModalState {
   visible: boolean;
@@ -63,6 +71,13 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
   const [companionTesting, setCompanionTesting] = useState(false);
   const [companionSaving, setCompanionSaving] = useState(false);
 
+  // Coolify API langsung (Bagian 3.2) - state terpisah lagi dari Companion API.
+  const [coolifyUrl, setCoolifyUrlInput] = useState('');
+  const [coolifyToken, setCoolifyTokenInput] = useState('');
+  const [showCoolifyToken, setShowCoolifyToken] = useState(false);
+  const [coolifyTesting, setCoolifyTesting] = useState(false);
+  const [coolifySaving, setCoolifySaving] = useState(false);
+
   useEffect(() => {
     (async () => {
       const [url, key] = await Promise.all([getBaseUrl(), getApiKey()]);
@@ -73,6 +88,11 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
       const [url, token] = await Promise.all([getCompanionBaseUrl(), getCompanionToken()]);
       if (url) setCompanionUrlInput(url);
       if (token) setCompanionTokenInput(token);
+    })();
+    (async () => {
+      const [url, token] = await Promise.all([getCoolifyBaseUrl(), getCoolifyToken()]);
+      if (url) setCoolifyUrlInput(url);
+      if (token) setCoolifyTokenInput(token);
     })();
   }, []);
 
@@ -216,6 +236,65 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
     });
   }
 
+  // ---- Coolify API langsung (Bagian 3.2) - mirror lagi pola yang sama.
+  async function handleCoolifyTest() {
+    if (!coolifyUrl.trim() || !coolifyToken.trim()) {
+      showInfo('warning', 'Isi dulu', 'URL dan Token Coolify wajib diisi buat tes koneksi.');
+      return;
+    }
+    setCoolifyTesting(true);
+    const ok = await coolifyHealthCheck(coolifyUrl.trim(), coolifyToken.trim());
+    setCoolifyTesting(false);
+    showInfo(
+      ok ? 'success' : 'error',
+      ok ? 'Berhasil' : 'Gagal',
+      ok ? 'Coolify API bisa dihubungi & token valid.' : 'Gagal hubungi Coolify API - cek URL & token-nya.'
+    );
+  }
+
+  async function handleCoolifySave() {
+    if (!coolifyUrl.trim() || !coolifyToken.trim()) {
+      showInfo('warning', 'Belum lengkap', 'URL dan Token Coolify wajib diisi.');
+      return;
+    }
+    setCoolifySaving(true);
+    try {
+      await setCoolifyBaseUrl(coolifyUrl.trim());
+      await setCoolifyToken(coolifyToken.trim());
+      showInfo('success', 'Tersimpan', 'Koneksi Coolify API tersimpan di perangkat ini.');
+    } catch (err) {
+      showInfo(
+        'error',
+        'Gagal Menyimpan',
+        `Kredensial gagal disimpan ke perangkat ini: ${err instanceof Error ? err.message : String(err)}`
+      );
+    } finally {
+      setCoolifySaving(false);
+    }
+  }
+
+  function handleCoolifyReset() {
+    setModal({
+      visible: true,
+      kind: 'warning',
+      title: 'Hapus koneksi Coolify API?',
+      message: 'URL & token Coolify API yang tersimpan di HP ini akan dihapus.',
+      buttons: [
+        { label: 'Batal', onPress: closeModal, variant: 'secondary' },
+        {
+          label: 'Hapus',
+          variant: 'danger',
+          onPress: async () => {
+            await clearCoolifyCredentials();
+            setCoolifyUrlInput('');
+            setCoolifyTokenInput('');
+            closeModal();
+          },
+        },
+      ],
+    });
+  }
+
   return (
     <View style={{ flex: 1 }}>
       {variant === 'tab' && <AuroraBackground />}
@@ -325,6 +404,51 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
         {Boolean(companionUrl || companionToken) && (
           <Pressable onPress={handleCompanionReset} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
             <Text style={{ fontSize: 12, color: colors.red, fontWeight: '600' }}>Hapus koneksi Companion API</Text>
+          </Pressable>
+        )}
+      </Card>
+
+      <Text style={styles.sectionTitle}>Coolify API Langsung (Beta)</Text>
+      <Card style={styles.introCard}>
+        <View style={styles.introIconWrap}>
+          <Ionicons name="cube-outline" size={18} color={colors.accent} />
+        </View>
+        <Text style={styles.intro}>
+          Buat start/stop/restart & lihat status app langsung dari Coolify (setara PM2 di atas). Token bisa sama
+          persis dengan COOLIFY_API_TOKEN yang udah diisi di .env Companion API - instance Coolify yang sama.
+        </Text>
+      </Card>
+      <Card>
+        <FormField
+          label="URL Coolify"
+          placeholder="http://ip-vps-coolify:8000"
+          keyboardType="url"
+          value={coolifyUrl}
+          onChangeText={setCoolifyUrlInput}
+        />
+        <FormField
+          label="Token"
+          placeholder="Tempel Coolify API Token di sini"
+          secureTextEntry={!showCoolifyToken}
+          value={coolifyToken}
+          onChangeText={setCoolifyTokenInput}
+          rightElement={
+            <Pressable hitSlop={8} onPress={() => setShowCoolifyToken((v) => !v)}>
+              <Ionicons name={showCoolifyToken ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.inkFaint} />
+            </Pressable>
+          }
+        />
+        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
+          <View style={{ flex: 1 }}>
+            <Button label="Tes Koneksi" variant="secondary" loading={coolifyTesting} onPress={handleCoolifyTest} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button label="Simpan" loading={coolifySaving} onPress={handleCoolifySave} />
+          </View>
+        </View>
+        {Boolean(coolifyUrl || coolifyToken) && (
+          <Pressable onPress={handleCoolifyReset} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
+            <Text style={{ fontSize: 12, color: colors.red, fontWeight: '600' }}>Hapus koneksi Coolify API</Text>
           </Pressable>
         )}
       </Card>
