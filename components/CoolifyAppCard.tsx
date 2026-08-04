@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -31,15 +31,28 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
   const [pending, setPending] = useState<ActionKind | null>(null);
   const busy = pending !== null;
 
+  // "settling" - abis start/stop/restart, Coolify proses async (dispatch job
+  // deploy, gak langsung selesai). Polling dipercepat sementara + status pill
+  // diganti "Memproses..." biar user gak ngira app-nya nge-freeze pas
+  // sebenernya masih transisi. Auto-clear 20 detik sebagai safety net kalau
+  // status gak kunjung berubah dari yang diharapkan.
+  const [settling, setSettling] = useState(false);
+
+  useEffect(() => {
+    if (!settling) return;
+    const t = setTimeout(() => setSettling(false), 20000);
+    return () => clearTimeout(t);
+  }, [settling]);
+
   const appQuery = useQuery({
     queryKey: ['coolify-app', applicationUuid],
     queryFn: () => getCoolifyApplication(applicationUuid),
-    refetchInterval: 15000,
+    refetchInterval: settling ? 3000 : 15000,
   });
   const restartQuery = useQuery({
     queryKey: ['companion-restart-count', applicationUuid],
     queryFn: () => getApplicationRestartCount(applicationUuid),
-    refetchInterval: 15000,
+    refetchInterval: settling ? 3000 : 15000,
   });
 
   function invalidate() {
@@ -51,6 +64,7 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
     setPending(kind);
     try {
       await fn();
+      setSettling(true);
       invalidate();
     } catch (err) {
       Alert.alert('Gagal', err instanceof ApiError ? err.message : 'Terjadi kesalahan tak terduga.');
@@ -79,6 +93,12 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
   const isOnline = typeof rawStatus === 'string' && rawStatus.toLowerCase().includes('running');
   const restartCount = restartQuery.data?.ok ? restartQuery.data.restartCount : null;
   const restartWarn = restartCount != null && restartCount >= 20 ? colors.red : restartCount != null && restartCount >= 5 ? colors.amber : undefined;
+  // CATATAN: sengaja gak coba deteksi "udah kelar transisi" dari isi rawStatus
+  // - build/deploy Coolify butuh waktu, dan app tetap bisa lapor status lama
+  // selama proses jalan (container lama belum diganti). Gak ada cara aman
+  // bedain "masih proses" vs "udah final" cuma dari string status doang tanpa
+  // data lebih (mis. deployment job status terpisah) - jadi settling murni
+  // pakai timeout tetap (20 detik) di atas, bukan heuristik yang bisa salah.
 
   return (
     <Card style={styles.card}>
@@ -100,6 +120,11 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
           <Text style={{ fontSize: 11, color: colors.red }}>
             {(appQuery.error as Error)?.message ?? 'Gagal ambil status'}
           </Text>
+        ) : settling ? (
+          <View style={styles.settlingPill}>
+            <ActivityIndicator size="small" color={colors.amber} />
+            <Text style={styles.settlingLabel}>Memproses...</Text>
+          </View>
         ) : rawStatus ? (
           <StatusPill status={rawStatus} />
         ) : (
@@ -185,4 +210,14 @@ const styles = StyleSheet.create({
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },
   actionBtnDisabled: { opacity: 0.5 },
   actionLabel: { fontSize: 12, fontWeight: '700' },
+  settlingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.amberSoft,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm + 2,
+  },
+  settlingLabel: { fontSize: 11, fontWeight: '700', color: colors.amber },
 });
