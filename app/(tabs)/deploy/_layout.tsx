@@ -24,6 +24,7 @@ export default function DeployStackLayout() {
       <Stack.Screen name="new" options={{ title: 'Deploy Project Baru', presentation: 'modal' }} />
       <Stack.Screen name="ssl" options={{ title: 'Terbitkan SSL', presentation: 'modal' }} />
       <Stack.Screen name="coolify-files" options={{ title: 'File Viewer Coolify (Beta)', presentation: 'modal' }} />
+      <Stack.Screen name="coolify-new" options={{ title: 'Deploy Baru (Coolify Beta)', presentation: 'modal' }} />
       <Stack.Screen name="[jobId]/index" options={{ title: 'Detail Job' }} />
       <Stack.Screen name="[jobId]/retry" options={{ title: 'Retry Deploy', presentation: 'modal' }} />
       <Stack.Screen name="nginx/index" options={{ title: 'Site Nginx' }} />

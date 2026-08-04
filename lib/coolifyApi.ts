@@ -107,3 +107,90 @@ export async function coolifyHealthCheck(baseUrl: string, token: string): Promis
     return false;
   }
 }
+
+// ===================== Create App (Deploy Baru) =====================
+// Sumber: dokumentasi resmi Coolify (coolify.io/docs/api-reference), BUKAN
+// dari komunitas/tebakan - tapi endpoint create ini SENDIRI belum pernah
+// dites ke instance nyata kamu (beda dari start/stop/restart yang udah
+// confirmed). Wajib dites ke 1 app kecil dulu, jangan langsung project besar.
+
+export interface CoolifyProjectSummary {
+  id: number;
+  uuid: string;
+  name: string;
+  description?: string;
+}
+
+export async function listCoolifyProjects(): Promise<CoolifyProjectSummary[]> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get('/projects');
+    return res.data;
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil daftar project Coolify.');
+  }
+}
+
+export interface CoolifyServerSummary {
+  uuid: string;
+  name: string;
+  [key: string]: unknown;
+}
+
+export async function listCoolifyServers(): Promise<CoolifyServerSummary[]> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get('/servers');
+    return res.data;
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil daftar server Coolify.');
+  }
+}
+
+export interface CreatePublicApplicationPayload {
+  project_uuid: string;
+  server_uuid: string;
+  environment_name: string;
+  git_repository: string;
+  git_branch: string;
+  build_pack: 'nixpacks' | 'static' | 'dockerfile' | 'dockercompose';
+  ports_exposes: string;
+  name?: string;
+  base_directory?: string;
+  domains?: string;
+}
+
+export async function createCoolifyPublicApplication(
+  payload: CreatePublicApplicationPayload
+): Promise<{ uuid: string }> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.post('/applications/public', payload);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err, 'Gagal bikin application baru di Coolify.');
+  }
+}
+
+/**
+ * Bulk-set env vars setelah app dibuat. Coolify gak terima raw .env blob
+ * lewat endpoint create - wajib array {key, value}, jadi parsing dari
+ * textarea dilakukan di layar pemanggil (coolify-new.tsx), bukan di sini.
+ *
+ * PALING GAK PASTI dari semua fungsi baru di file ini - payload key "envs"
+ * diambil dari 1 referensi implementasi pihak ketiga (MCP wrapper), BUKAN
+ * dari OpenAPI spec resmi Coolify yang saya baca lengkap. Kalau gagal
+ * dengan pesan error soal format body, ini yang pertama dicurigai salah.
+ */
+export async function setCoolifyApplicationEnvsBulk(
+  applicationUuid: string,
+  envs: { key: string; value: string }[]
+): Promise<void> {
+  if (envs.length === 0) return;
+  const c = await coolifyClient();
+  try {
+    await c.patch(`/applications/${encodeURIComponent(applicationUuid)}/envs/bulk`, { envs });
+  } catch (err) {
+    throw toApiError(err, 'App berhasil dibuat, tapi gagal set environment variables.');
+  }
+}

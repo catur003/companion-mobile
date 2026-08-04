@@ -9,7 +9,7 @@ import { AuroraBackground } from '@/components/AuroraBackground';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useTabTopPadding } from '@/lib/useTopInset';
 import { listJobs, Job } from '@/lib/api';
-import { isCompanionConfigured } from '@/lib/storage';
+import { isCompanionConfigured, isCoolifyConfigured } from '@/lib/storage';
 
 const TYPE_LABEL: Record<string, string> = {
   deploy_nextjs: 'Deploy',
@@ -35,6 +35,11 @@ export default function JobsScreen() {
   const companionConfigured = useQuery({
     queryKey: ['companion-configured'],
     queryFn: isCompanionConfigured,
+    staleTime: 5000,
+  });
+  const coolifyConfigured = useQuery({
+    queryKey: ['coolify-configured'],
+    queryFn: isCoolifyConfigured,
     staleTime: 5000,
   });
 
@@ -123,6 +128,17 @@ export default function JobsScreen() {
           <Ionicons name="lock-closed-outline" size={17} color={colors.accent} />
           <Text style={styles.fabLabelText}>SSL</Text>
         </Pressable>
+        {coolifyConfigured.data === true && (
+          <Pressable
+            style={({ pressed }) => [styles.fabLabeled, { opacity: pressed ? 0.85 : 1 }]}
+            onPress={() => router.push('/(tabs)/deploy/coolify-new')}
+            accessibilityRole="button"
+            accessibilityLabel="Deploy Baru lewat Coolify (Beta)"
+          >
+            <Ionicons name="cube-outline" size={17} color={colors.green} />
+            <Text style={[styles.fabLabelText, { color: colors.green }]}>Coolify</Text>
+          </Pressable>
+        )}
         <Fab onPress={() => router.push('/(tabs)/deploy/new')} size={54}>
           <Ionicons name="add" size={26} color={colors.onAccent} />
         </Fab>
