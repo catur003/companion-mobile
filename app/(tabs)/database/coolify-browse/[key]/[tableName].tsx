@@ -37,9 +37,9 @@ export default function CoolifyBrowseTableDetailScreen() {
         </View>
       ) : (
         <>
-          {tab === 'describe' && <DescribeTab databaseUuid={project.databaseUuid} tableName={tableName} />}
-          {tab === 'count' && <CountTab databaseUuid={project.databaseUuid} tableName={tableName} />}
-          {tab === 'preview' && <PreviewTab databaseUuid={project.databaseUuid} tableName={tableName} />}
+          {tab === 'describe' && <DescribeTab databaseUuid={project.databaseUuid} schemaName={project.schemaName} tableName={tableName} />}
+          {tab === 'count' && <CountTab databaseUuid={project.databaseUuid} schemaName={project.schemaName} tableName={tableName} />}
+          {tab === 'preview' && <PreviewTab databaseUuid={project.databaseUuid} schemaName={project.schemaName} tableName={tableName} />}
         </>
       )}
     </View>
@@ -54,13 +54,14 @@ function TabButton({ label, active, onPress }: { label: string; active: boolean;
   );
 }
 
-function DescribeTab({ databaseUuid, tableName }: { databaseUuid: string; tableName: string }) {
+function DescribeTab({ databaseUuid, schemaName, tableName }: { databaseUuid: string; schemaName?: string; tableName: string }) {
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['coolify-describe', databaseUuid, tableName],
+    queryKey: ['coolify-describe', databaseUuid, schemaName, tableName],
     queryFn: async () => {
       const res = await runCompanionDbQuery(
         databaseUuid,
-        `SELECT column_name AS field, column_type AS type, is_nullable AS nullable, column_key AS col_key, column_default AS col_default, extra AS extra FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${tableName.replace(/'/g, "''")}' ORDER BY ordinal_position`
+        `SELECT column_name AS field, column_type AS type, is_nullable AS nullable, column_key AS col_key, column_default AS col_default, extra AS extra FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${tableName.replace(/'/g, "''")}' ORDER BY ordinal_position`,
+        schemaName
       );
       return res.rows;
     },
@@ -88,11 +89,11 @@ function DescribeTab({ databaseUuid, tableName }: { databaseUuid: string; tableN
   );
 }
 
-function CountTab({ databaseUuid, tableName }: { databaseUuid: string; tableName: string }) {
+function CountTab({ databaseUuid, schemaName, tableName }: { databaseUuid: string; schemaName?: string; tableName: string }) {
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['coolify-count', databaseUuid, tableName],
+    queryKey: ['coolify-count', databaseUuid, schemaName, tableName],
     queryFn: async () => {
-      const res = await runCompanionDbQuery(databaseUuid, `SELECT COUNT(*) AS total FROM ${ident(tableName)}`);
+      const res = await runCompanionDbQuery(databaseUuid, `SELECT COUNT(*) AS total FROM ${ident(tableName)}`, schemaName);
       return Number(res.rows[0]?.total ?? 0);
     },
   });
@@ -111,11 +112,11 @@ function CountTab({ databaseUuid, tableName }: { databaseUuid: string; tableName
   );
 }
 
-function PreviewTab({ databaseUuid, tableName }: { databaseUuid: string; tableName: string }) {
+function PreviewTab({ databaseUuid, schemaName, tableName }: { databaseUuid: string; schemaName?: string; tableName: string }) {
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['coolify-preview', databaseUuid, tableName],
+    queryKey: ['coolify-preview', databaseUuid, schemaName, tableName],
     queryFn: async () => {
-      const res = await runCompanionDbQuery(databaseUuid, `SELECT * FROM ${ident(tableName)} LIMIT 10`);
+      const res = await runCompanionDbQuery(databaseUuid, `SELECT * FROM ${ident(tableName)} LIMIT 10`, schemaName);
       return res;
     },
   });

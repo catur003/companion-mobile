@@ -24,7 +24,7 @@ export default function CoolifyQueryScreen() {
   const runMutation = useMutation({
     mutationFn: () => {
       if (!selectedProject) throw new ApiError('Pilih project dulu.', 'NO_PROJECT_SELECTED');
-      return runCompanionDbQuery(selectedProject.databaseUuid!, sql);
+      return runCompanionDbQuery(selectedProject.databaseUuid!, sql, selectedProject.schemaName);
     },
     onSuccess: (res) => setResult(res),
     onError: (err) => {

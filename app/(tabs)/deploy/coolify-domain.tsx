@@ -22,6 +22,7 @@ export default function CoolifyDomainScreen() {
     enabled: Boolean(selectedProject),
   });
 
+  const [mode, setMode] = useState<'sslip' | 'custom'>('sslip');
   const [domain, setDomain] = useState('');
 
   const saveMutation = useMutation({
@@ -90,9 +91,37 @@ export default function CoolifyDomainScreen() {
       </Card>
 
       <Card>
+        <Text style={styles.label}>Sumber Domain</Text>
+        <View style={styles.chipRow}>
+          <Pressable onPress={() => setMode('sslip')} style={[styles.chip, mode === 'sslip' && styles.chipActive]}>
+            <Text style={[styles.chipText, mode === 'sslip' && styles.chipTextActive]}>Sslip.io (gratis, instan)</Text>
+          </Pressable>
+          <Pressable onPress={() => setMode('custom')} style={[styles.chip, mode === 'custom' && styles.chipActive]}>
+            <Text style={[styles.chipText, mode === 'custom' && styles.chipTextActive]}>Domain Sendiri</Text>
+          </Pressable>
+        </View>
+        {mode === 'sslip' ? (
+          <Text style={styles.modeHint}>
+            Format: https://&lt;applicationUuid&gt;.&lt;IP-VPS&gt;.sslip.io — gratis & langsung jalan tanpa setting DNS
+            apapun, tapi domainnya gak profesional (isinya UUID acak). Cocok buat testing.
+          </Text>
+        ) : (
+          <Text style={styles.modeHint}>
+            WAJIB setting DNS A record dulu di provider domain kamu (Cloudflare/dst) SEBELUM isi form ini —
+            arahkan subdomain ke IP VPS Coolify (43.134.105.169). Kalau DNS belum ngarah, SSL Let's Encrypt bakal
+            gagal diterbitkan (domain aktif tapi https-nya invalid).
+          </Text>
+        )}
+      </Card>
+
+      <Card>
         <FormField
           label="Domain Baru"
-          placeholder="https://app.contoh.com"
+          placeholder={
+            mode === 'sslip'
+              ? 'https://bxpbj2db8xneyfquv7o9l1bk.43.134.105.169.sslip.io'
+              : 'https://app.zenin.my.id  (ganti sesuai domainmu)'
+          }
           keyboardType="url"
           autoCapitalize="none"
           value={domain}
@@ -111,6 +140,7 @@ const styles = StyleSheet.create({
   intro: { fontSize: 12.5, color: colors.inkMuted, lineHeight: 18 },
   mutedText: { fontSize: 13, color: colors.inkMuted },
   label: { fontSize: 12, fontWeight: '700', color: colors.inkMuted, marginBottom: spacing.sm },
+  modeHint: { fontSize: 11.5, color: colors.inkFaint, lineHeight: 16, marginTop: spacing.xs },
   currentDomain: { fontSize: 13, fontFamily: 'monospace', color: colors.ink },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {

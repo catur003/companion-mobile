@@ -134,10 +134,38 @@ export interface DbQueryResult {
   truncated: boolean;
 }
 
-/** POST /db/query - SELECT-only lewat driver mysql2/pg, connection string diambil live dari Coolify tiap request. */
-export async function runCompanionDbQuery(databaseUuid: string, sql: string): Promise<DbQueryResult> {
+/**
+ * POST /db/query - SELECT-only lewat driver mysql2/pg, connection string diambil live dari Coolify tiap request.
+ * "schema" (BARU) - isi kalau databaseUuid ini server yang dipakai bareng
+ * (numpang) beberapa project, biar query ke schema yang bener, BUKAN
+ * schema default server itu (yang mungkin punya project lain).
+ */
+export async function runCompanionDbQuery(databaseUuid: string, sql: string, schema?: string): Promise<DbQueryResult> {
   const c = await companionClient();
-  return unwrap(c.post('/db/query', { databaseUuid, sql }));
+  return unwrap(c.post('/db/query', { databaseUuid, sql, schema }));
+}
+
+/** GET /db/schemas - daftar nama schema/database di 1 server MySQL, buat cegah tabrakan nama & resolve project yang numpang. */
+export async function listDatabaseSchemas(databaseUuid: string): Promise<string[]> {
+  const c = await companionClient();
+  const result = await unwrap<{ schemas: string[] }>(c.get('/db/schemas', { params: { databaseUuid } }));
+  return result.schemas;
+}
+
+/**
+ * POST /db/create-schema - bikin schema+user baru DI SERVER yang UDAH ADA
+ * (numpang 1 mysqld, gak bikin container/server baru - hemat RAM, sama pola
+ * kayak vps-manager lama). SELALU butuh confirmed:true.
+ */
+export async function createDatabaseSchema(opts: {
+  databaseUuid: string;
+  newDbName: string;
+  newUser: string;
+  newPassword: string;
+  confirmed: boolean;
+}): Promise<{ newDbName: string; newUser: string }> {
+  const c = await companionClient();
+  return unwrap(c.post('/db/create-schema', opts));
 }
 
 // ===================== Registered Projects =====================
@@ -147,6 +175,8 @@ export interface RegisteredCoolifyProject {
   name: string;
   applicationUuid: string;
   databaseUuid?: string;
+  /** BARU (4 Agustus 2026): diisi kalau databaseUuid ini "numpang" 1 server MySQL bareng project lain (bukan schema default Coolify) - WAJIB diisi kalau numpang, biar query/browse gak nyasar ke schema project lain. */
+  schemaName?: string;
 }
 
 /**

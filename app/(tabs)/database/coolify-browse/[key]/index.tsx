@@ -85,11 +85,12 @@ export default function CoolifyBrowseTablesScreen() {
   });
 
   const tablesQuery = useQuery({
-    queryKey: ['coolify-browse-tables', project?.databaseUuid],
+    queryKey: ['coolify-browse-tables', project?.databaseUuid, project?.schemaName],
     queryFn: async () => {
       const res = await runCompanionDbQuery(
         project!.databaseUuid!,
-        'SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name'
+        'SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name',
+        project!.schemaName
       );
       return res.rows.map((r) => String(r.name));
     },
@@ -160,7 +161,7 @@ export default function CoolifyBrowseTablesScreen() {
                     icon="pulse-outline"
                     loading={pending === 'test'}
                     disabled={pending !== null}
-                    onPress={() => runAction('test', () => runCompanionDbQuery(project.databaseUuid!, 'SELECT 1'))}
+                    onPress={() => runAction('test', () => runCompanionDbQuery(project.databaseUuid!, 'SELECT 1', project.schemaName))}
                   />
                   <MiniAction
                     label="Reset Password"

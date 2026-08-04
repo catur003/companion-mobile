@@ -7,7 +7,13 @@ import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
 import { colors, spacing, radius } from '@/lib/theme';
 import { listCoolifyApplications, listCoolifyDatabases } from '@/lib/coolifyApi';
-import { listRegisteredProjects, upsertRegisteredProject, deleteRegisteredProject, RegisteredCoolifyProject } from '@/lib/companionApi';
+import {
+  listRegisteredProjects,
+  upsertRegisteredProject,
+  deleteRegisteredProject,
+  listDatabaseSchemas,
+  RegisteredCoolifyProject,
+} from '@/lib/companionApi';
 import { ApiError } from '@/lib/api';
 
 /**
@@ -29,6 +35,13 @@ export default function CoolifyProjectMappingScreen() {
   const [name, setName] = useState('');
   const [applicationUuid, setApplicationUuid] = useState<string | undefined>();
   const [databaseUuid, setDatabaseUuid] = useState<string | undefined>();
+  const [schemaName, setSchemaName] = useState('');
+
+  const schemasQuery = useQuery({
+    queryKey: ['coolify-schemas', databaseUuid],
+    queryFn: () => listDatabaseSchemas(databaseUuid!),
+    enabled: Boolean(databaseUuid),
+  });
 
   function resetForm() {
     setEditingKey(null);
@@ -36,6 +49,7 @@ export default function CoolifyProjectMappingScreen() {
     setName('');
     setApplicationUuid(undefined);
     setDatabaseUuid(undefined);
+    setSchemaName('');
   }
 
   function startEdit(entry: RegisteredCoolifyProject) {
@@ -44,6 +58,7 @@ export default function CoolifyProjectMappingScreen() {
     setName(entry.name);
     setApplicationUuid(entry.applicationUuid);
     setDatabaseUuid(entry.databaseUuid);
+    setSchemaName(entry.schemaName ?? '');
   }
 
   const saveMutation = useMutation({
@@ -51,7 +66,13 @@ export default function CoolifyProjectMappingScreen() {
       if (!key.trim() || !name.trim() || !applicationUuid) {
         throw new ApiError('Key, Nama, dan Application wajib diisi.', 'INCOMPLETE');
       }
-      return upsertRegisteredProject({ key: key.trim(), name: name.trim(), applicationUuid, databaseUuid });
+      return upsertRegisteredProject({
+        key: key.trim(),
+        name: name.trim(),
+        applicationUuid,
+        databaseUuid,
+        schemaName: schemaName.trim() || undefined,
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['registered-projects'] });
@@ -132,6 +153,33 @@ export default function CoolifyProjectMappingScreen() {
           ))}
         </View>
 
+        {databaseUuid && (
+          <View style={{ marginTop: spacing.sm }}>
+            <Text style={styles.label}>Schema di Server Ini</Text>
+            {schemasQuery.isLoading && <Text style={styles.mutedText}>Memuat daftar schema...</Text>}
+            {schemasQuery.isError && (
+              <Text style={[styles.mutedText, { color: colors.red }]}>Gagal ambil schema: {(schemasQuery.error as Error)?.message}</Text>
+            )}
+            {(schemasQuery.data?.length ?? 0) > 1 && (
+              <Text style={[styles.mutedText, { color: colors.amber, marginBottom: spacing.xs }]}>
+                Server ini punya lebih dari 1 schema - WAJIB isi "Nama Schema" di bawah biar gak nyasar ke schema project lain.
+              </Text>
+            )}
+            {schemasQuery.data?.map((s) => (
+              <Pressable key={s} onPress={() => setSchemaName(s)} style={styles.schemaSuggestion}>
+                <Text style={styles.schemaSuggestionText}>• {s} (tap buat isi)</Text>
+              </Pressable>
+            ))}
+            <FormField
+              label="Nama Schema (kosongin kalau server ini cuma 1 database)"
+              placeholder="mis. webdesadb"
+              value={schemaName}
+              onChangeText={setSchemaName}
+              autoCapitalize="none"
+            />
+          </View>
+        )}
+
         <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
           <View style={{ flex: 1 }}>
             <Button label={editingKey ? 'Update' : 'Simpan'} loading={saveMutation.isPending} onPress={() => saveMutation.mutate()} />
@@ -151,7 +199,7 @@ export default function CoolifyProjectMappingScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.entryName}>{entry.name}</Text>
               <Text style={styles.entryMeta}>
-                {entry.key} · {entry.databaseUuid ? 'app + db' : 'app doang'}
+                {entry.key} · {entry.databaseUuid ? (entry.schemaName ? `db + schema:${entry.schemaName}` : 'app + db') : 'app doang'}
               </Text>
             </View>
             <Pressable onPress={() => startEdit(entry)} style={{ padding: 6 }}>
@@ -188,6 +236,8 @@ const styles = StyleSheet.create({
   pickChipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   pickChipText: { fontSize: 12, fontWeight: '600', color: colors.inkMuted },
   pickChipTextActive: { color: colors.accent, fontWeight: '700' },
+  schemaSuggestion: { paddingVertical: 3 },
+  schemaSuggestionText: { fontSize: 12, color: colors.accent, fontFamily: 'monospace' },
   entryCard: { paddingVertical: spacing.sm },
   entryRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   entryName: { fontSize: 14, fontWeight: '700', color: colors.ink },
