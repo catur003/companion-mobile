@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "ZenVPS",
+    "slug": "zenhub",
+    "scheme": "zenvps",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "backgroundColor": "#0D9488",
+      "resizeMode": "contain"
+    },
+    "android": {
+      "package": "com.zenhub.zenvps",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D9488"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "useLegacyPackaging": true,
+            "packagingOptions": {
+              "exclude": [
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+              ]
+            },
+            "enableMinifyInReleaseBuilds": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e9c165f7-9e6a-4cbc-b3f9-faaa3e594676"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.zenhub.zenvps"
+    }
+  }
+}
