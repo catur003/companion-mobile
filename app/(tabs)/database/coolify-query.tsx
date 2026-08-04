@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -7,18 +7,21 @@ import { FormField } from '@/components/FormField';
 import { colors, spacing, radius } from '@/lib/theme';
 import { runCompanionDbQuery, DbQueryResult } from '@/lib/companionApi';
 import { ApiError } from '@/lib/api';
-
-// TEMPORARY (Fase 4, baru PORTOFOLIO): databaseUuid MySQL PORTOFOLIO
-// di-hardcode - sama alasannya kayak PORTOFOLIO_CONTAINER_ID di Dashboard,
-// belum ada pemetaan project -> resource Coolify yang bisa ditebak otomatis.
-const PORTOFOLIO_DB_UUID = 'w9j9c3qkkpfg9r3tco4st5f8';
+import { coolifyProjectsWithDatabase } from '@/lib/coolifyProjects';
 
 export default function CoolifyQueryScreen() {
+  const projects = coolifyProjectsWithDatabase();
+  const [selectedKey, setSelectedKey] = useState(projects[0]?.key);
+  const selectedProject = projects.find((p) => p.key === selectedKey) ?? null;
+
   const [sql, setSql] = useState('SELECT * FROM admins LIMIT 20');
   const [result, setResult] = useState<DbQueryResult | null>(null);
 
   const runMutation = useMutation({
-    mutationFn: () => runCompanionDbQuery(PORTOFOLIO_DB_UUID, sql),
+    mutationFn: () => {
+      if (!selectedProject) throw new ApiError('Pilih project dulu.', 'NO_PROJECT_SELECTED');
+      return runCompanionDbQuery(selectedProject.databaseUuid!, sql);
+    },
     onSuccess: (res) => setResult(res),
     onError: (err) => {
       setResult(null);
@@ -26,14 +29,37 @@ export default function CoolifyQueryScreen() {
     },
   });
 
+  if (projects.length === 0) {
+    return (
+      <View style={styles.screen}>
+        <Card style={{ margin: spacing.lg }}>
+          <Text style={styles.mutedText}>Belum ada project Coolify dengan database terdaftar.</Text>
+        </Card>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Card style={styles.introCard}>
         <Text style={styles.intro}>
-          Beta. Cuma SELECT (termasuk WITH/CTE) yang diizinkan - endpoint ini menolak query mutasi. Target: database
-          MySQL PORTOFOLIO di Coolify.
+          Beta. Cuma SELECT (termasuk WITH/CTE) yang diizinkan - endpoint ini menolak query mutasi.
         </Text>
       </Card>
+
+      {projects.length > 1 && (
+        <View style={styles.chipRow}>
+          {projects.map((p) => (
+            <Pressable
+              key={p.key}
+              onPress={() => setSelectedKey(p.key)}
+              style={[styles.chip, selectedKey === p.key && styles.chipActive]}
+            >
+              <Text style={[styles.chipText, selectedKey === p.key && styles.chipTextActive]}>{p.name}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       <Card>
         <FormField
@@ -94,4 +120,16 @@ const styles = StyleSheet.create({
   rowData: { flexDirection: 'row', paddingVertical: 4 },
   cellHeader: { width: 130, fontSize: 11, fontWeight: '700', color: colors.ink, paddingRight: spacing.sm },
   cell: { width: 130, fontSize: 12, color: colors.inkMuted, paddingRight: spacing.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  chip: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    backgroundColor: colors.card,
+  },
+  chipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  chipText: { fontSize: 12.5, fontWeight: '700', color: colors.inkMuted },
+  chipTextActive: { color: colors.accent },
 });

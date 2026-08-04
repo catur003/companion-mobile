@@ -15,15 +15,7 @@ import { pushIntoTab } from '@/lib/nav';
 import { getMonitorStatus, listPm2Apps, savePm2Startup, ApiError } from '@/lib/api';
 import { CoolifyAppCard } from '@/components/CoolifyAppCard';
 import { isCoolifyConfigured } from '@/lib/storage';
-
-// TEMPORARY (Fase 4, baru PORTOFOLIO yang pindah ke Coolify): applicationUuid
-// di-hardcode di sini, BUKAN nama project - gak ada pemetaan nama project ke
-// app Coolify yang bisa ditebak otomatis. Begitu Fase 5 jalan (project lain
-// ikut pindah), ini WAJIB diganti jadi daftar dinamis, bukan ditambah
-// satu-satu manual di sini.
-// UUID application PORTOFOLIO di Coolify (confirmed 4 Agustus 2026 via
-// GET /api/v1/applications - cocok juga dengan subdomain sslip.io default-nya).
-const PORTOFOLIO_APPLICATION_UUID = 'bxpbj2db8xneyfquv7o9l1bk';
+import { COOLIFY_PROJECTS } from '@/lib/coolifyProjects';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -189,13 +181,12 @@ export default function DashboardScreen() {
         </Text>
       )}
 
-      {coolifyConfigured.data === true && (
+      {coolifyConfigured.data === true && COOLIFY_PROJECTS.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Coolify (Beta)</Text>
-          <CoolifyAppCard
-            name="PORTOFOLIO"
-            applicationUuid={PORTOFOLIO_APPLICATION_UUID}
-          />
+          {COOLIFY_PROJECTS.map((project) => (
+            <CoolifyAppCard key={project.key} name={project.name} applicationUuid={project.applicationUuid} />
+          ))}
         </>
       )}
       </ScrollView>
