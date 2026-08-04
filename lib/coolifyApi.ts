@@ -51,6 +51,35 @@ export async function getCoolifyApplication(applicationUuid: string): Promise<Co
   }
 }
 
+/** GET /applications - daftar SEMUA app Coolify (buat picker "Kelola Mapping Project", bukan buat CoolifyAppCard yang butuh 1 app spesifik). */
+export async function listCoolifyApplications(): Promise<CoolifyApplication[]> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get('/applications');
+    return res.data ?? [];
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil daftar application dari Coolify.');
+  }
+}
+
+export interface CoolifyDatabaseSummary {
+  uuid: string;
+  name: string;
+  database_type?: string;
+  [key: string]: unknown;
+}
+
+/** GET /databases - daftar SEMUA database Coolify (semua tipe), buat picker. */
+export async function listCoolifyDatabases(): Promise<CoolifyDatabaseSummary[]> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get('/databases');
+    return res.data ?? [];
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil daftar database dari Coolify.');
+  }
+}
+
 /**
  * CONFIRMED dari dokumentasi resmi (belum dites ke instance nyata): log
  * RUNTIME container (stdout/stderr app yang lagi jalan), historis - bukan

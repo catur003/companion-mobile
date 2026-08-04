@@ -146,6 +146,25 @@ export async function listRegisteredProjects(): Promise<RegisteredCoolifyProject
   return result.projects;
 }
 
+/**
+ * POST /projects - simpan mapping key/name/applicationUuid/databaseUuid ke
+ * projects.json di VPS (4 Agustus 2026, gantiin ritual SSH+nano manual).
+ * applicationUuid/databaseUuid WAJIB dipilih user dari daftar Coolify asli
+ * (listCoolifyApplications/listCoolifyDatabases) - BUKAN ditebak dari nama,
+ * biar gak ada resiko app ke-pasang database yang salah tanpa ketauan.
+ */
+export async function upsertRegisteredProject(entry: RegisteredCoolifyProject): Promise<RegisteredCoolifyProject[]> {
+  const c = await companionClient();
+  const result = await unwrap<{ projects: RegisteredCoolifyProject[] }>(c.post('/projects', entry));
+  return result.projects;
+}
+
+export async function deleteRegisteredProject(key: string): Promise<RegisteredCoolifyProject[]> {
+  const c = await companionClient();
+  const result = await unwrap<{ projects: RegisteredCoolifyProject[] }>(c.delete(`/projects/${encodeURIComponent(key)}`));
+  return result.projects;
+}
+
 // ===================== DB Migrate (Prisma push/seed dst) =====================
 
 export type CompanionProjectType = 'nextjs-prisma' | 'laravel';
@@ -159,10 +178,12 @@ export type CompanionMigrateMode = 'generate' | 'push' | 'push_force' | 'migrate
  * dipanggil, sama seperti pola destruktif lain di lib/api.ts.
  */
 export async function runCompanionDbMigrate(opts: {
-  projectType: CompanionProjectType;
-  mode: CompanionMigrateMode;
+  projectType?: CompanionProjectType;
+  mode?: CompanionMigrateMode;
   applicationUuid: string;
   confirmed?: boolean;
+  /** Kalau diisi, dipakai APA ADANYA (skip generateCommand) - buat gabung command (push && seed) atau fix runner yang gak cocok (.ts vs .js). */
+  customCommand?: string;
 }): Promise<{ command: string }> {
   const c = await companionClient();
   return unwrap(c.post('/db/migrate', opts));

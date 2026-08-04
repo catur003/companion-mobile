@@ -9,8 +9,31 @@ import { getCoolifyApplicationEnvs, setCoolifyApplicationEnvsBulk } from '@/lib/
 import { listRegisteredProjects } from '@/lib/companionApi';
 import { ApiError } from '@/lib/api';
 
-function envsToText(envs: { key: string; value: string }[]): string {
-  return envs.map((e) => `${e.key}=${e.value}`).join('\n');
+/**
+ * FIX (4 Agustus 2026): asumsi field "key"/"value" polos dari GET /envs
+ * TERBUKTI SALAH (muncul "undefined" di semua value pas dites nyata) -
+ * dokumentasi Coolify gak kasih schema detail buat endpoint ini. Sekarang
+ * coba beberapa kemungkinan nama field yang umum dipakai Laravel API
+ * (termasuk kemungkinan "real_value" - Coolify encode value env lewat
+ * kolom terpisah buat yang di-mark shared/preview di beberapa versi).
+ */
+function pickEnvKey(e: Record<string, unknown>): string {
+  return String(e.key ?? e.name ?? e.env_key ?? '');
+}
+function pickEnvValue(e: Record<string, unknown>): string {
+  const val = e.value ?? e.real_value ?? e.env_value ?? e.val;
+  return val != null ? String(val) : '';
+}
+
+function envsToText(envs: Record<string, unknown>[]): string {
+  const lines = envs.map((e) => `${pickEnvKey(e)}=${pickEnvValue(e)}`);
+  const allEmpty = envs.length > 0 && envs.every((e) => !pickEnvValue(e));
+  if (allEmpty) {
+    // Masih salah tebak field-nya lagi - daripada nampilin semua kosong diam-diam,
+    // kasih tau + lampirin raw response biar ketauan field aslinya apa buat next fix.
+    return `# PERINGATAN: gagal parse value env vars (field response beda dari dugaan)\n# Raw response buat debug:\n# ${JSON.stringify(envs)}\n\n${lines.join('\n')}`;
+  }
+  return lines.join('\n');
 }
 
 function textToEnvs(text: string): { key: string; value: string }[] {

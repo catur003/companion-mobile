@@ -3,24 +3,30 @@ import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-nati
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
+import { FormField } from '@/components/FormField';
 import { colors, spacing, radius } from '@/lib/theme';
-import { runCompanionDbMigrate, listRegisteredProjects, CompanionMigrateMode } from '@/lib/companionApi';
+import { runCompanionDbMigrate, listRegisteredProjects } from '@/lib/companionApi';
 import { ApiError } from '@/lib/api';
 
-const MODES: { value: CompanionMigrateMode; label: string; danger?: boolean }[] = [
-  { value: 'generate', label: 'Generate' },
-  { value: 'push', label: 'DB Push' },
-  { value: 'push_force', label: 'DB Push (Force)', danger: true },
-  { value: 'migrate', label: 'Migrate Deploy' },
-  { value: 'seed', label: 'DB Seed', danger: true },
+// Tombol "isi otomatis" - ngisi textarea command, BUKAN langsung kirim.
+// User bisa edit/gabung sebelum kirim (mis. tempel "&& npx tsx prisma/seed.ts"
+// abis "push" buat 1x kirim gak 2x redeploy, atau ganti runner seed kalau
+// generate-nya gak cocok sama struktur project).
+const QUICK_FILL: { label: string; command: string; danger?: boolean }[] = [
+  { label: 'Generate', command: 'npx prisma generate' },
+  { label: 'DB Push', command: 'npx prisma db push' },
+  { label: 'DB Push (Force)', command: 'npx prisma db push --accept-data-loss', danger: true },
+  { label: 'Migrate Deploy', command: 'npx prisma migrate deploy' },
+  { label: 'DB Seed', command: 'npx prisma db seed', danger: true },
 ];
 
 /**
- * UI buat endpoint POST /db/migrate Companion API - backend-nya udah lama
- * jadi & tested manual (dipakai buat PORTOFOLIO via curl), ini baru bikin
- * UI-nya di ZenVPS. projectType di-hardcode "nextjs-prisma" - semua project
- * yang migrasi sejauh ini emang Next.js+Prisma (lihat dokumen migrasi
- * Bagian 3.3 soal Laravel nanti - toggle projectType baru relevan pas itu).
+ * UI buat endpoint POST /db/migrate. UBAH (4 Agustus 2026): dulu tombol mode
+ * langsung kirim 1-1 - masalahnya push+seed jadi 2x redeploy (lambat), dan
+ * command default "npx prisma db seed" gak selalu cocok (butuh config
+ * "prisma.seed" di package.json, atau runner beda kalau seed file .ts).
+ * Sekarang: 1 textarea command yang bisa diedit/digabung bebas sebelum
+ * kirim - tombol quick-fill cuma starting point, bukan aksi final.
  */
 export default function CoolifyMigrateScreen() {
   const projectsQuery = useQuery({ queryKey: ['registered-projects'], queryFn: listRegisteredProjects, staleTime: 60000 });
@@ -28,23 +34,21 @@ export default function CoolifyMigrateScreen() {
 
   const [selectedKey, setSelectedKey] = useState<string | undefined>();
   const selectedProject = projects.find((p) => p.key === selectedKey) ?? projects[0] ?? null;
-  const [mode, setMode] = useState<CompanionMigrateMode>('push');
-  const [lastCommand, setLastCommand] = useState<string | null>(null);
-
-  const modeInfo = MODES.find((m) => m.value === mode);
+  const [command, setCommand] = useState('npx prisma db push');
+  const [lastSent, setLastSent] = useState<string | null>(null);
 
   const runMutation = useMutation({
     mutationFn: (confirmed: boolean) => {
       if (!selectedProject) throw new ApiError('Pilih project dulu.', 'NO_PROJECT_SELECTED');
+      if (!command.trim()) throw new ApiError('Command kosong.', 'EMPTY_COMMAND');
       return runCompanionDbMigrate({
-        projectType: 'nextjs-prisma',
-        mode,
         applicationUuid: selectedProject.applicationUuid,
+        customCommand: command.trim(),
         confirmed,
       });
     },
     onSuccess: (res) => {
-      setLastCommand(res.command);
+      setLastSent(res.command);
       Alert.alert(
         'Command Terkirim',
         `"${res.command}" udah dikirim ke Post-deployment Command Coolify.\n\nBELUM otomatis jalan - trigger Redeploy (card Coolify di Dashboard) biar command ini beneran dieksekusi.`
@@ -53,10 +57,8 @@ export default function CoolifyMigrateScreen() {
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'CONFIRMATION_REQUIRED') {
         Alert.alert(
-          `Konfirmasi: ${modeInfo?.label}`,
-          modeInfo?.danger
-            ? 'Mode ini bisa berakibat KEHILANGAN DATA (push --accept-data-loss) atau nge-run seed berkali-kali. Lanjut?'
-            : 'Lanjutkan aksi ini?',
+          'Konfirmasi',
+          'Command ini bisa berakibat perubahan permanen di database (push force / seed berkali-kali / dll). Lanjut kirim?',
           [
             { text: 'Batal', style: 'cancel' },
             { text: 'Lanjut', style: 'destructive', onPress: () => runMutation.mutate(true) },
@@ -67,6 +69,14 @@ export default function CoolifyMigrateScreen() {
       Alert.alert('Gagal', err instanceof ApiError ? err.message : 'Terjadi kesalahan.');
     },
   });
+
+  function quickFill(cmd: string) {
+    setCommand((prev) => {
+      if (!prev.trim()) return cmd;
+      // Kalau udah ada isinya, tawarin gabung (&&) daripada ketimpa - biar gampang compose "push && seed".
+      return `${prev.trim()} && ${cmd}`;
+    });
+  }
 
   if (projectsQuery.isLoading) {
     return (
@@ -93,7 +103,7 @@ export default function CoolifyMigrateScreen() {
       <Card style={styles.introCard}>
         <Text style={styles.intro}>
           Beta. Mengirim command ke Post-deployment Command Coolify - BELUM langsung eksekusi, wajib Redeploy manual
-          setelah ini buat command-nya beneran jalan.
+          setelah ini. Tap tombol di bawah buat isi cepat, boleh diedit/digabung ("&&") sebelum kirim.
         </Text>
       </Card>
 
@@ -114,28 +124,33 @@ export default function CoolifyMigrateScreen() {
       )}
 
       <Card>
-        <Text style={styles.label}>Mode</Text>
+        <Text style={styles.label}>Isi Cepat</Text>
         <View style={styles.modeRow}>
-          {MODES.map((m) => (
-            <Button
-              key={m.value}
-              label={m.label}
-              variant={mode === m.value ? (m.danger ? 'danger' : 'primary') : 'secondary'}
-              onPress={() => setMode(m.value)}
-            />
+          {QUICK_FILL.map((q) => (
+            <Button key={q.label} label={q.label} variant={q.danger ? 'danger' : 'secondary'} onPress={() => quickFill(q.command)} />
           ))}
+          <Button label="Kosongkan" variant="secondary" onPress={() => setCommand('')} />
         </View>
-        <Button
-          label={`Kirim: ${modeInfo?.label ?? mode}`}
-          loading={runMutation.isPending}
-          onPress={() => runMutation.mutate(false)}
-        />
       </Card>
 
-      {lastCommand && (
+      <Card>
+        <FormField
+          label={`Command — ${selectedProject?.name ?? '-'}`}
+          value={command}
+          onChangeText={setCommand}
+          multiline
+          numberOfLines={3}
+          autoCapitalize="none"
+          style={{ minHeight: 70, textAlignVertical: 'top', fontFamily: 'monospace', fontSize: 12.5 }}
+          placeholder="mis. npx prisma db push && npx tsx prisma/seed.ts"
+        />
+        <Button label="Kirim Command" loading={runMutation.isPending} onPress={() => runMutation.mutate(false)} />
+      </Card>
+
+      {lastSent && (
         <Card>
           <Text style={styles.label}>Command Terakhir Dikirim</Text>
-          <Text style={styles.code}>{lastCommand}</Text>
+          <Text style={styles.code}>{lastSent}</Text>
         </Card>
       )}
     </ScrollView>
@@ -149,7 +164,7 @@ const styles = StyleSheet.create({
   intro: { fontSize: 12.5, color: colors.inkMuted, lineHeight: 18 },
   mutedText: { fontSize: 13, color: colors.inkMuted },
   label: { fontSize: 12, fontWeight: '700', color: colors.inkMuted, marginBottom: spacing.sm },
-  modeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
+  modeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   code: { fontFamily: 'monospace', fontSize: 12.5, color: colors.ink },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
