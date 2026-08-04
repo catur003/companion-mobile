@@ -94,6 +94,17 @@ export default function JobsScreen() {
               </Card>
             )}
             {coolifyConfigured.data === true && (
+              <Card onPress={() => router.push('/(tabs)/deploy/coolify-domain')} style={styles.coolifyLink}>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.type}>COOLIFY</Text>
+                    <Text style={styles.name}>Domain & SSL (Beta)</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+                </View>
+              </Card>
+            )}
+            {coolifyConfigured.data === true && (
               <Card onPress={() => router.push('/(tabs)/deploy/coolify-env')} style={styles.coolifyLink}>
                 <View style={styles.row}>
                   <View style={{ flex: 1 }}>

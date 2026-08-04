@@ -186,6 +186,71 @@ function toApiError(err: unknown, fallbackMessage: string): ApiError {
   return new ApiError(fallbackMessage, 'UNKNOWN');
 }
 
+/**
+ * BELUM DIVERIFIKASI ke instance nyata - pola endpoint sama kayak application
+ * (POST /databases/{uuid}/start|stop|restart), dikonfirmasi dari dokumentasi
+ * (DeepWiki, berdasar source code Coolify). Confidence lumayan tinggi karena
+ * konsisten sama pola application yang udah tested, tapi tetap belum dicoba.
+ */
+export interface CoolifyDatabase {
+  uuid: string;
+  name: string;
+  status?: string;
+  database_type?: string;
+  [key: string]: unknown;
+}
+
+export async function getCoolifyDatabaseDetail(databaseUuid: string): Promise<CoolifyDatabase> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get(`/databases/${encodeURIComponent(databaseUuid)}`);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil status database dari Coolify.');
+  }
+}
+
+export async function startCoolifyDatabase(databaseUuid: string): Promise<void> {
+  const c = await coolifyClient();
+  try {
+    await c.post(`/databases/${encodeURIComponent(databaseUuid)}/start`);
+  } catch (err) {
+    throw toApiError(err, 'Gagal start database di Coolify.');
+  }
+}
+
+export async function stopCoolifyDatabase(databaseUuid: string): Promise<void> {
+  const c = await coolifyClient();
+  try {
+    await c.post(`/databases/${encodeURIComponent(databaseUuid)}/stop`);
+  } catch (err) {
+    throw toApiError(err, 'Gagal stop database di Coolify.');
+  }
+}
+
+export async function restartCoolifyDatabase(databaseUuid: string): Promise<void> {
+  const c = await coolifyClient();
+  try {
+    await c.post(`/databases/${encodeURIComponent(databaseUuid)}/restart`);
+  } catch (err) {
+    throw toApiError(err, 'Gagal restart database di Coolify.');
+  }
+}
+
+/**
+ * PATCH /applications/{uuid} - ganti domain (SSL Let's Encrypt otomatis
+ * ngikutin, sama kayak yang kita lakuin manual buat PORTOFOLIO/web-desa,
+ * cuma sekarang trigger dari app). Pakai prefix https:// biar SSL aktif.
+ */
+export async function updateCoolifyApplicationDomain(applicationUuid: string, domains: string): Promise<void> {
+  const c = await coolifyClient();
+  try {
+    await c.patch(`/applications/${encodeURIComponent(applicationUuid)}`, { domains });
+  } catch (err) {
+    throw toApiError(err, 'Gagal update domain aplikasi di Coolify.');
+  }
+}
+
 export async function coolifyHealthCheck(baseUrl: string, token: string): Promise<boolean> {
   try {
     const res = await axios.get(`${baseUrl.replace(/\/+$/, '')}/api/v1/applications`, {

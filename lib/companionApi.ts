@@ -182,6 +182,22 @@ export async function deleteRegisteredProject(key: string): Promise<RegisteredCo
   return result.projects;
 }
 
+/**
+ * POST /db/reset-password - SENGAJA endpoint sempit, cuma bisa ALTER USER
+ * (ganti password), BUKAN mutation umum. Username-nya otomatis diambil dari
+ * connection string Coolify sendiri (bukan user yang nentuin) - user cuma
+ * kasih password baru. SELALU butuh confirmed:true - ganti password
+ * disconnect semua koneksi yang masih pakai password lama.
+ */
+export async function resetDatabasePassword(
+  databaseUuid: string,
+  newPassword: string,
+  confirmed: boolean
+): Promise<{ username: string }> {
+  const c = await companionClient();
+  return unwrap(c.post('/db/reset-password', { databaseUuid, newPassword, confirmed }));
+}
+
 // ===================== DB Migrate (Prisma push/seed dst) =====================
 
 export type CompanionProjectType = 'nextjs-prisma' | 'laravel';
