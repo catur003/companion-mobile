@@ -70,6 +70,25 @@ export async function getCoolifyApplicationLogs(applicationUuid: string, lines =
 }
 
 /**
+ * Log PROSES BUILD/DEPLOY (npm install, next build, dst) - beda dari
+ * getCoolifyApplicationLogs (itu runtime stdout/stderr app yang lagi jalan).
+ * BELUM DIVERIFIKASI: field yang isinya log text belum confirmed namanya
+ * persis apa di response Coolify (kemungkinan "logs" sama kayak endpoint
+ * runtime, tapi bisa juga beda struktur/array of lines) - makanya fungsi ini
+ * balikin objek MENTAH apa adanya, biar UI bisa nampilin defensif (coba
+ * beberapa kemungkinan field, fallback JSON.stringify kalau gak ketemu).
+ */
+export async function getCoolifyDeployment(deploymentUuid: string): Promise<Record<string, unknown>> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get(`/deployments/${encodeURIComponent(deploymentUuid)}`);
+    return res.data ?? {};
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil detail deployment dari Coolify.');
+  }
+}
+
+/**
  * BELUM DIVERIFIKASI ke instance nyata (beda dari post_deployment_command
  * yang udah confirmed via GET+PATCH). Endpoint & method di bawah diambil
  * dari dokumentasi resmi Coolify (POST /api/v1/applications/{uuid}/start
@@ -77,11 +96,16 @@ export async function getCoolifyApplicationLogs(applicationUuid: string, lines =
  * WAJIB dites ke PORTOFOLIO dulu (bukan app production) sebelum dipakai
  * beneran - kalau gagal, pesan errornya bakal muncul jelas (lihat toApiError),
  * bukan pura-pura sukses.
+ *
+ * Response kemungkinan besar isinya deployment_uuid (dipakai buat lihat log
+ * build-nya, lihat getCoolifyDeployment di bawah) - belum confirmed field
+ * exact-nya, jadi dibaca defensif (optional).
  */
-export async function startCoolifyApplication(applicationUuid: string): Promise<void> {
+export async function startCoolifyApplication(applicationUuid: string): Promise<{ deployment_uuid?: string }> {
   const c = await coolifyClient();
   try {
-    await c.post(`/applications/${encodeURIComponent(applicationUuid)}/start`);
+    const res = await c.post(`/applications/${encodeURIComponent(applicationUuid)}/start`);
+    return res.data ?? {};
   } catch (err) {
     throw toApiError(err, 'Gagal start/deploy aplikasi di Coolify.');
   }
@@ -240,6 +264,40 @@ export async function createCoolifyPrivateGithubApplication(
     return res.data;
   } catch (err) {
     throw toApiError(err, 'Gagal bikin application (private repo) di Coolify.');
+  }
+}
+
+// ===================== Create Database =====================
+// Sumber: dokumentasi resmi Coolify. SETIAP tipe DB (mysql/postgresql/dst)
+// punya endpoint create TERPISAH & field spesifik (beda dari applications
+// yang cukup 1 field "build_pack" buat bedain) - jadi didesain 1 fungsi per
+// tipe dari awal, BUKAN 1 fungsi generik yang nebak-nebak field. Nambah tipe
+// baru nanti = nambah 1 interface + 1 fungsi baru persis pola ini, TIDAK
+// mengubah createCoolifyMysqlDatabase yang udah ada/jalan.
+
+export interface CreateMysqlDatabasePayload {
+  project_uuid: string;
+  server_uuid: string;
+  environment_name: string;
+  name?: string;
+  mysql_database?: string;
+  mysql_user?: string;
+  /** Kosongin biar Coolify generate sendiri (lebih aman - lihat DEPLOYMENT-NOTES.md soal password gak bisa diedit lewat form setelah container start). */
+  mysql_password?: string;
+  mysql_root_password?: string;
+  is_public?: boolean;
+  public_port?: number;
+  instant_deploy?: boolean;
+}
+
+/** BELUM DIVERIFIKASI ke instance nyata - field schema dari dokumentasi resmi Coolify, endpoint create baru pertama kali dites lewat aplikasi kemarin (beda resource, sama pola). */
+export async function createCoolifyMysqlDatabase(payload: CreateMysqlDatabasePayload): Promise<{ uuid: string }> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.post('/databases/mysql', payload);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err, 'Gagal bikin database MySQL di Coolify.');
   }
 }
 

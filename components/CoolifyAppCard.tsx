@@ -7,6 +7,7 @@ import { Card } from './Card';
 import { StatusPill } from './StatusPill';
 import { colors, spacing } from '@/lib/theme';
 import { ApiError } from '@/lib/api';
+import { pushIntoTab } from '@/lib/nav';
 import {
   getCoolifyApplication,
   startCoolifyApplication,
@@ -48,6 +49,12 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
   // sebenernya masih transisi. Durasi beda per action (lihat SETTLE_MS) -
   // safety net kalau status gak kunjung berubah dari yang diharapkan.
   const [settling, setSettling] = useState(false);
+  // Ditangkep dari response start/deploy (kalau Coolify balikin) - dipakai
+  // buat langsung link ke log BUILD deployment ini spesifik, bukan cuma
+  // runtime log. Cuma "hidup" selama komponen ini gak di-unmount (session
+  // ini doang) - bukan riwayat permanen, itu limitasi jujur (lihat
+  // getCoolifyDeployment di coolifyApi.ts, belum ada listing riwayat).
+  const [lastDeploymentUuid, setLastDeploymentUuid] = useState<string | undefined>();
 
   useEffect(() => {
     if (!settling || !pending) return;
@@ -72,10 +79,13 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
     qc.invalidateQueries({ queryKey: ['companion-restart-count', applicationUuid] });
   }
 
-  async function run(kind: ActionKind, fn: () => Promise<void>) {
+  async function run(kind: ActionKind, fn: () => Promise<{ deployment_uuid?: string } | void>) {
     setPending(kind);
     try {
-      await fn();
+      const result = await fn();
+      if (kind === 'start' && result && 'deployment_uuid' in result && result.deployment_uuid) {
+        setLastDeploymentUuid(result.deployment_uuid);
+      }
       setSettling(true);
       invalidate();
     } catch (err) {
@@ -175,7 +185,11 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
         <ActionBtn
           icon="terminal-outline"
           label="Log"
-          onPress={() => router.push({ pathname: '/(tabs)/deploy/coolify-logs', params: { applicationUuid } })}
+          onPress={() => {
+            const qs = new URLSearchParams({ applicationUuid });
+            if (lastDeploymentUuid) qs.set('deploymentUuid', lastDeploymentUuid);
+            pushIntoTab(router, '/(tabs)/deploy', `/(tabs)/deploy/coolify-logs?${qs.toString()}`);
+          }}
           disabled={busy}
         />
       </View>

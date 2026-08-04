@@ -20,6 +20,7 @@ export default function DatabaseStackLayout() {
       <Stack.Screen name="index" options={{ title: 'Database' }} />
       <Stack.Screen name="create" options={{ title: 'Buat Database', presentation: 'modal' }} />
       <Stack.Screen name="coolify-query" options={{ title: 'Coolify SQL (Beta)', presentation: 'modal' }} />
+      <Stack.Screen name="coolify-new-database" options={{ title: 'Buat Database Coolify (Beta)', presentation: 'modal' }} />
       <Stack.Screen name="[dbName]/index" options={{ title: 'Detail Database' }} />
       <Stack.Screen name="[dbName]/[tableName]" options={{ title: 'Detail Tabel' }} />
     </Stack>

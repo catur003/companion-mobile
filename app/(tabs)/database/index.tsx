@@ -9,7 +9,7 @@ import { AuroraBackground } from '@/components/AuroraBackground';
 import { colors, spacing } from '@/lib/theme';
 import { useTabTopPadding } from '@/lib/useTopInset';
 import { listDatabases, testDatabaseConnection, ApiError } from '@/lib/api';
-import { isCompanionConfigured } from '@/lib/storage';
+import { isCompanionConfigured, isCoolifyConfigured } from '@/lib/storage';
 
 export default function DatabaseListScreen() {
   const router = useRouter();
@@ -22,6 +22,11 @@ export default function DatabaseListScreen() {
   const companionConfigured = useQuery({
     queryKey: ['companion-configured'],
     queryFn: isCompanionConfigured,
+    staleTime: 5000,
+  });
+  const coolifyConfigured = useQuery({
+    queryKey: ['coolify-configured'],
+    queryFn: isCoolifyConfigured,
     staleTime: 5000,
   });
 
@@ -57,7 +62,18 @@ export default function DatabaseListScreen() {
                 <View style={styles.row}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.name}>Coolify SQL Query (Beta)</Text>
-                    <Text style={styles.meta}>PORTOFOLIO — SELECT-only, raw hasil</Text>
+                    <Text style={styles.meta}>SELECT-only, raw hasil</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+                </View>
+              </Card>
+            )}
+            {coolifyConfigured.data === true && (
+              <Card onPress={() => router.push('/(tabs)/database/coolify-new-database')} style={styles.coolifyLink}>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>Buat Database Coolify (Beta)</Text>
+                    <Text style={styles.meta}>MySQL - langsung ke Coolify, terpisah dari VPS lama</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
                 </View>
