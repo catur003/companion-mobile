@@ -14,8 +14,8 @@ import { useTabTopPadding } from '@/lib/useTopInset';
 import { pushIntoTab } from '@/lib/nav';
 import { getMonitorStatus, listPm2Apps, savePm2Startup, ApiError } from '@/lib/api';
 import { CoolifyAppCard } from '@/components/CoolifyAppCard';
-import { isCoolifyConfigured } from '@/lib/storage';
-import { COOLIFY_PROJECTS } from '@/lib/coolifyProjects';
+import { isCompanionConfigured, isCoolifyConfigured } from '@/lib/storage';
+import { listRegisteredProjects } from '@/lib/companionApi';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -35,10 +35,25 @@ export default function DashboardScreen() {
   // Card CoolifyAppCard urus query restart-count & status-nya sendiri -
   // di sini cuma perlu tau udah dikonfigurasi atau belum, biar gak nampilin
   // card buat user yang belum migrasi apapun.
+  const companionConfigured = useQuery({
+    queryKey: ['companion-configured'],
+    queryFn: isCompanionConfigured,
+    staleTime: 5000,
+  });
   const coolifyConfigured = useQuery({
     queryKey: ['coolify-configured'],
     queryFn: isCoolifyConfigured,
     staleTime: 5000,
+  });
+  // Daftar project di-fetch dari Companion API (projects.json di VPS), BUKAN
+  // hardcode lagi - nambah project baru di VPS langsung kebaca di sini tanpa
+  // build ulang app. staleTime pendek (bukan refetchInterval) - daftar
+  // project jarang berubah, gak perlu polling terus-terusan kayak status app.
+  const registeredProjects = useQuery({
+    queryKey: ['registered-projects'],
+    queryFn: listRegisteredProjects,
+    enabled: companionConfigured.data === true,
+    staleTime: 60000,
   });
 
   const { data, isLoading, isError, error, refetch, isRefetching } = monitor;
@@ -181,10 +196,10 @@ export default function DashboardScreen() {
         </Text>
       )}
 
-      {coolifyConfigured.data === true && COOLIFY_PROJECTS.length > 0 && (
+      {coolifyConfigured.data === true && (registeredProjects.data?.length ?? 0) > 0 && (
         <>
           <Text style={styles.sectionTitle}>Coolify (Beta)</Text>
-          {COOLIFY_PROJECTS.map((project) => (
+          {registeredProjects.data!.map((project) => (
             <CoolifyAppCard key={project.key} name={project.name} applicationUuid={project.applicationUuid} />
           ))}
         </>

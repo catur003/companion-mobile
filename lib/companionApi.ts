@@ -111,6 +111,29 @@ export async function runCompanionDbQuery(databaseUuid: string, sql: string): Pr
   return unwrap(c.post('/db/query', { databaseUuid, sql }));
 }
 
+// ===================== Registered Projects =====================
+
+export interface RegisteredCoolifyProject {
+  key: string;
+  name: string;
+  applicationUuid: string;
+  databaseUuid?: string;
+}
+
+/**
+ * GET /projects - daftar project Coolify, dibaca Companion API dari
+ * projects.json di VPS. UBAH (4 Agustus 2026): dulu di-hardcode di
+ * lib/coolifyProjects.ts (array statis di kode app) - masalahnya nambah 1
+ * project = wajib build ulang app mobile. Sekarang fetch dari server,
+ * nambah project = edit projects.json doang, ZenVPS langsung kebaca tanpa
+ * build ulang.
+ */
+export async function listRegisteredProjects(): Promise<RegisteredCoolifyProject[]> {
+  const c = await companionClient();
+  const result = await unwrap<{ projects: RegisteredCoolifyProject[] }>(c.get('/projects'));
+  return result.projects;
+}
+
 // ===================== DB Migrate (Prisma push/seed dst) =====================
 
 export type CompanionProjectType = 'nextjs-prisma' | 'laravel';

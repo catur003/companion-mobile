@@ -1,18 +1,22 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
 import { colors, spacing, radius } from '@/lib/theme';
-import { runCompanionDbQuery, DbQueryResult } from '@/lib/companionApi';
+import { runCompanionDbQuery, listRegisteredProjects, DbQueryResult } from '@/lib/companionApi';
 import { ApiError } from '@/lib/api';
 import { coolifyProjectsWithDatabase } from '@/lib/coolifyProjects';
 
 export default function CoolifyQueryScreen() {
-  const projects = coolifyProjectsWithDatabase();
-  const [selectedKey, setSelectedKey] = useState(projects[0]?.key);
-  const selectedProject = projects.find((p) => p.key === selectedKey) ?? null;
+  // Daftar project di-fetch dari Companion API (projects.json di VPS) - lihat
+  // catatan di lib/companionApi.ts (listRegisteredProjects), bukan hardcode.
+  const projectsQuery = useQuery({ queryKey: ['registered-projects'], queryFn: listRegisteredProjects, staleTime: 60000 });
+  const projects = coolifyProjectsWithDatabase(projectsQuery.data ?? []);
+
+  const [selectedKey, setSelectedKey] = useState<string | undefined>();
+  const selectedProject = projects.find((p) => p.key === selectedKey) ?? projects[0] ?? null;
 
   const [sql, setSql] = useState('SELECT * FROM admins LIMIT 20');
   const [result, setResult] = useState<DbQueryResult | null>(null);
@@ -28,6 +32,28 @@ export default function CoolifyQueryScreen() {
       Alert.alert('Query Gagal', err instanceof ApiError ? err.message : 'Terjadi kesalahan.');
     },
   });
+
+  if (projectsQuery.isLoading) {
+    return (
+      <View style={styles.screen}>
+        <Card style={{ margin: spacing.lg }}>
+          <Text style={styles.mutedText}>Memuat daftar project...</Text>
+        </Card>
+      </View>
+    );
+  }
+
+  if (projectsQuery.isError) {
+    return (
+      <View style={styles.screen}>
+        <Card style={{ margin: spacing.lg }}>
+          <Text style={[styles.mutedText, { color: colors.red }]}>
+            Gagal ambil daftar project: {(projectsQuery.error as Error)?.message}
+          </Text>
+        </Card>
+      </View>
+    );
+  }
 
   if (projects.length === 0) {
     return (
@@ -53,9 +79,11 @@ export default function CoolifyQueryScreen() {
             <Pressable
               key={p.key}
               onPress={() => setSelectedKey(p.key)}
-              style={[styles.chip, selectedKey === p.key && styles.chipActive]}
+              style={[styles.chip, (selectedKey ?? projects[0].key) === p.key && styles.chipActive]}
             >
-              <Text style={[styles.chipText, selectedKey === p.key && styles.chipTextActive]}>{p.name}</Text>
+              <Text style={[styles.chipText, (selectedKey ?? projects[0].key) === p.key && styles.chipTextActive]}>
+                {p.name}
+              </Text>
             </Pressable>
           ))}
         </View>

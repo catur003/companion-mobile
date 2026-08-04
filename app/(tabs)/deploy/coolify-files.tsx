@@ -1,18 +1,21 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
 import { colors, spacing, radius } from '@/lib/theme';
-import { readContainerFile } from '@/lib/companionApi';
+import { readContainerFile, listRegisteredProjects } from '@/lib/companionApi';
 import { ApiError } from '@/lib/api';
-import { COOLIFY_PROJECTS } from '@/lib/coolifyProjects';
 
 export default function CoolifyFileViewerScreen() {
-  const projects = COOLIFY_PROJECTS;
-  const [selectedKey, setSelectedKey] = useState(projects[0]?.key);
-  const selectedProject = projects.find((p) => p.key === selectedKey) ?? null;
+  // Daftar project di-fetch dari Companion API (projects.json di VPS) - lihat
+  // catatan di lib/companionApi.ts, bukan hardcode lagi.
+  const projectsQuery = useQuery({ queryKey: ['registered-projects'], queryFn: listRegisteredProjects, staleTime: 60000 });
+  const projects = projectsQuery.data ?? [];
+
+  const [selectedKey, setSelectedKey] = useState<string | undefined>();
+  const selectedProject = projects.find((p) => p.key === selectedKey) ?? projects[0] ?? null;
 
   const [path, setPath] = useState('package.json');
   const [content, setContent] = useState<string | null>(null);
@@ -28,6 +31,28 @@ export default function CoolifyFileViewerScreen() {
       Alert.alert('Gagal Baca File', err instanceof ApiError ? err.message : 'Terjadi kesalahan.');
     },
   });
+
+  if (projectsQuery.isLoading) {
+    return (
+      <View style={styles.screen}>
+        <Card style={{ margin: spacing.lg }}>
+          <Text style={styles.mutedText}>Memuat daftar project...</Text>
+        </Card>
+      </View>
+    );
+  }
+
+  if (projectsQuery.isError) {
+    return (
+      <View style={styles.screen}>
+        <Card style={{ margin: spacing.lg }}>
+          <Text style={[styles.mutedText, { color: colors.red }]}>
+            Gagal ambil daftar project: {(projectsQuery.error as Error)?.message}
+          </Text>
+        </Card>
+      </View>
+    );
+  }
 
   if (projects.length === 0) {
     return (
@@ -55,9 +80,11 @@ export default function CoolifyFileViewerScreen() {
             <Pressable
               key={p.key}
               onPress={() => setSelectedKey(p.key)}
-              style={[styles.chip, selectedKey === p.key && styles.chipActive]}
+              style={[styles.chip, (selectedKey ?? projects[0].key) === p.key && styles.chipActive]}
             >
-              <Text style={[styles.chipText, selectedKey === p.key && styles.chipTextActive]}>{p.name}</Text>
+              <Text style={[styles.chipText, (selectedKey ?? projects[0].key) === p.key && styles.chipTextActive]}>
+                {p.name}
+              </Text>
             </Pressable>
           ))}
         </View>
