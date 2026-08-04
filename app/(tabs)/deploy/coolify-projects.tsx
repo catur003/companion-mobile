@@ -155,14 +155,14 @@ export default function CoolifyProjectMappingScreen() {
 
         {databaseUuid && (
           <View style={{ marginTop: spacing.sm }}>
-            <Text style={styles.label}>Schema di Server Ini</Text>
+            <Text style={styles.label}>Database di Server Ini</Text>
             {schemasQuery.isLoading && <Text style={styles.mutedText}>Memuat daftar schema...</Text>}
             {schemasQuery.isError && (
-              <Text style={[styles.mutedText, { color: colors.red }]}>Gagal ambil schema: {(schemasQuery.error as Error)?.message}</Text>
+              <Text style={[styles.mutedText, { color: colors.red }]}>Gagal ambil database: {(schemasQuery.error as Error)?.message}</Text>
             )}
             {(schemasQuery.data?.length ?? 0) > 1 && (
               <Text style={[styles.mutedText, { color: colors.amber, marginBottom: spacing.xs }]}>
-                Server ini punya lebih dari 1 schema - WAJIB isi "Nama Schema" di bawah biar gak nyasar ke schema project lain.
+                Server ini punya lebih dari 1 database - WAJIB isi "Nama Database" di bawah biar gak nyasar ke database project lain.
               </Text>
             )}
             {schemasQuery.data?.map((s) => (
@@ -171,7 +171,7 @@ export default function CoolifyProjectMappingScreen() {
               </Pressable>
             ))}
             <FormField
-              label="Nama Schema (kosongin kalau server ini cuma 1 database)"
+              label="Nama Database (kosongin kalau server ini cuma 1 database)"
               placeholder="mis. webdesadb"
               value={schemaName}
               onChangeText={setSchemaName}
@@ -199,7 +199,7 @@ export default function CoolifyProjectMappingScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.entryName}>{entry.name}</Text>
               <Text style={styles.entryMeta}>
-                {entry.key} · {entry.databaseUuid ? (entry.schemaName ? `db + schema:${entry.schemaName}` : 'app + db') : 'app doang'}
+                {entry.key} · {entry.databaseUuid ? (entry.schemaName ? `db: ${entry.schemaName}` : 'app + db') : 'app doang'}
               </Text>
             </View>
             <Pressable onPress={() => startEdit(entry)} style={{ padding: 6 }}>
