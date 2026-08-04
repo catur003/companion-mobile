@@ -164,6 +164,21 @@ export async function deleteContainerDatabase(containerUuid: string, name: strin
   await unwrap<void>(c.delete(`/db/containers/${encodeURIComponent(containerUuid)}/databases/${encodeURIComponent(name)}`, { data: { confirmed } }));
 }
 
+export interface ContainerDatabaseConnection {
+  host: string;
+  port: string;
+  username: string;
+  password: string;
+  database: string;
+  connectionString: string;
+}
+
+/** GET /db/containers/:uuid/databases/:name/connection - info koneksi lengkap, bisa dipanggil kapan aja (bukan cuma sekali pas bikin). */
+export async function getContainerDatabaseConnection(containerUuid: string, dbName: string): Promise<ContainerDatabaseConnection> {
+  const c = await companionClient();
+  return unwrap(c.get(`/db/containers/${encodeURIComponent(containerUuid)}/databases/${encodeURIComponent(dbName)}/connection`));
+}
+
 /** GET /db/schemas - daftar nama schema/database di 1 server MySQL, buat cegah tabrakan nama & resolve project yang numpang. */
 export async function listDatabaseSchemas(databaseUuid: string): Promise<string[]> {
   const c = await companionClient();
