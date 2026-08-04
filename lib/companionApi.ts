@@ -145,6 +145,25 @@ export async function runCompanionDbQuery(databaseUuid: string, sql: string, sch
   return unwrap(c.post('/db/query', { databaseUuid, sql, schema }));
 }
 
+export interface ContainerDatabaseEntry {
+  name: string;
+  isDefault: boolean;
+  hasCredentials: boolean;
+}
+
+/** GET /db/containers/:uuid/databases - daftar semua database (A/B/C) di 1 Container Database, dengan status default/numpang. */
+export async function listContainerDatabases(containerUuid: string): Promise<ContainerDatabaseEntry[]> {
+  const c = await companionClient();
+  const result = await unwrap<{ databases: ContainerDatabaseEntry[] }>(c.get(`/db/containers/${encodeURIComponent(containerUuid)}/databases`));
+  return result.databases;
+}
+
+/** DELETE /db/containers/:uuid/databases/:name - hapus 1 database numpang (data ilang permanen). Gak bisa hapus database default. */
+export async function deleteContainerDatabase(containerUuid: string, name: string, confirmed: boolean): Promise<void> {
+  const c = await companionClient();
+  await unwrap<void>(c.delete(`/db/containers/${encodeURIComponent(containerUuid)}/databases/${encodeURIComponent(name)}`, { data: { confirmed } }));
+}
+
 /** GET /db/schemas - daftar nama schema/database di 1 server MySQL, buat cegah tabrakan nama & resolve project yang numpang. */
 export async function listDatabaseSchemas(databaseUuid: string): Promise<string[]> {
   const c = await companionClient();

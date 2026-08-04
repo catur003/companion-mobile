@@ -57,6 +57,17 @@ export default function DatabaseListScreen() {
                 <Button label="Test Koneksi" variant="secondary" loading={testMutation.isPending} onPress={() => testMutation.mutate()} />
               </View>
             </Card>
+            {coolifyConfigured.data === true && (
+              <Card onPress={() => router.push('/(tabs)/database/coolify-container-db')} style={styles.coolifyLink}>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>Kelola Container Database (Beta)</Text>
+                    <Text style={styles.meta}>Tambah/hapus database di server yang udah ada</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+                </View>
+              </Card>
+            )}
             {companionConfigured.data === true && (
               <Card onPress={() => router.push('/(tabs)/database/coolify-browse')} style={styles.coolifyLink}>
                 <View style={styles.row}>
