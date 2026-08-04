@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from './Card';
@@ -16,6 +17,15 @@ import { getApplicationRestartCount } from '@/lib/companionApi';
 
 type ActionKind = 'start' | 'stop' | 'restart';
 
+// "start" (deploy penuh: install+build) butuh jauh lebih lama dari
+// "restart"/"stop" (cuma proses container) - disamain 20 detik dulu ternyata
+// kependekan buat deploy Next.js beneran (temuan user, 4 Agustus 2026).
+const SETTLE_MS: Record<ActionKind, number> = {
+  start: 90000,
+  restart: 20000,
+  stop: 15000,
+};
+
 /**
  * Mirror PmAppCard.tsx SENGAJA - "workflow biar sama" (request user). Beda
  * utamanya: data status dari Coolify API (getCoolifyApplication) sementara
@@ -27,6 +37,7 @@ type ActionKind = 'start' | 'stop' | 'restart';
  * TETAP - backend Companion API resolve container aktif sendiri sekarang.
  */
 export function CoolifyAppCard({ name, applicationUuid }: { name: string; applicationUuid: string }) {
+  const router = useRouter();
   const qc = useQueryClient();
   const [pending, setPending] = useState<ActionKind | null>(null);
   const busy = pending !== null;
@@ -34,14 +45,15 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
   // "settling" - abis start/stop/restart, Coolify proses async (dispatch job
   // deploy, gak langsung selesai). Polling dipercepat sementara + status pill
   // diganti "Memproses..." biar user gak ngira app-nya nge-freeze pas
-  // sebenernya masih transisi. Auto-clear 20 detik sebagai safety net kalau
-  // status gak kunjung berubah dari yang diharapkan.
+  // sebenernya masih transisi. Durasi beda per action (lihat SETTLE_MS) -
+  // safety net kalau status gak kunjung berubah dari yang diharapkan.
   const [settling, setSettling] = useState(false);
 
   useEffect(() => {
-    if (!settling) return;
-    const t = setTimeout(() => setSettling(false), 20000);
+    if (!settling || !pending) return;
+    const t = setTimeout(() => setSettling(false), SETTLE_MS[pending] ?? 20000);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settling]);
 
   const appQuery = useQuery({
@@ -160,6 +172,12 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
             color={colors.green}
           />
         )}
+        <ActionBtn
+          icon="terminal-outline"
+          label="Log"
+          onPress={() => router.push({ pathname: '/(tabs)/deploy/coolify-logs', params: { applicationUuid } })}
+          disabled={busy}
+        />
       </View>
     </Card>
   );

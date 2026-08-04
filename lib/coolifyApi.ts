@@ -52,6 +52,24 @@ export async function getCoolifyApplication(applicationUuid: string): Promise<Co
 }
 
 /**
+ * CONFIRMED dari dokumentasi resmi (belum dites ke instance nyata): log
+ * RUNTIME container (stdout/stderr app yang lagi jalan), historis - bukan
+ * live-stream. Beda dari log proses BUILD/deploy (npm install, next build,
+ * dst) yang Coolify simpen di record deployment terpisah (ada endpoint
+ * /deployments juga, belum di-wire di sini - baru runtime logs dulu, itu
+ * yang paling sering dibutuhin buat debug app yang lagi jalan).
+ */
+export async function getCoolifyApplicationLogs(applicationUuid: string, lines = 200): Promise<string> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get(`/applications/${encodeURIComponent(applicationUuid)}/logs`, { params: { lines } });
+    return res.data?.logs ?? '';
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil log aplikasi dari Coolify.');
+  }
+}
+
+/**
  * BELUM DIVERIFIKASI ke instance nyata (beda dari post_deployment_command
  * yang udah confirmed via GET+PATCH). Endpoint & method di bawah diambil
  * dari dokumentasi resmi Coolify (POST /api/v1/applications/{uuid}/start
