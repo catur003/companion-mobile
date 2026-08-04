@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, Alert, RefreshControl } from 'react-n
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Card } from '@/components/Card';
 import { Fab } from '@/components/Fab';
