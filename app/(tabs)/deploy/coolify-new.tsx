@@ -11,7 +11,9 @@ import { ApiError } from '@/lib/api';
 import {
   listCoolifyProjects,
   listCoolifyServers,
+  listCoolifyGithubApps,
   createCoolifyPublicApplication,
+  createCoolifyPrivateGithubApplication,
   setCoolifyApplicationEnvsBulk,
 } from '@/lib/coolifyApi';
 
@@ -43,6 +45,7 @@ const BUILD_PACKS: Array<'nixpacks' | 'static' | 'dockerfile' | 'dockercompose'>
  */
 export default function NewCoolifyDeployScreen() {
   const router = useRouter();
+  const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [name, setName] = useState('');
   const [gitRepo, setGitRepo] = useState('');
   const [branch, setBranch] = useState('main');
@@ -51,6 +54,16 @@ export default function NewCoolifyDeployScreen() {
   const [baseDirectory, setBaseDirectory] = useState('');
   const [buildPack, setBuildPack] = useState<(typeof BUILD_PACKS)[number]>('nixpacks');
   const [envContent, setEnvContent] = useState('');
+
+  const githubAppsQuery = useQuery({
+    queryKey: ['coolify-github-apps'],
+    queryFn: listCoolifyGithubApps,
+    enabled: visibility === 'private',
+  });
+  const autoGithubAppUuid = githubAppsQuery.data?.length === 1 ? githubAppsQuery.data[0].uuid : undefined;
+  const needsGithubAppPick = (githubAppsQuery.data?.length ?? 0) > 1;
+  const [manualGithubAppUuid, setManualGithubAppUuid] = useState<string | undefined>();
+  const githubAppUuid = manualGithubAppUuid ?? autoGithubAppUuid;
 
   // Sama pola kayak new.tsx: auto-pick kalau cuma ada 1 opsi, jangan nanya
   // hal yang jawabannya cuma 1 kemungkinan. Server biasanya cuma "localhost"
@@ -74,18 +87,35 @@ export default function NewCoolifyDeployScreen() {
       if (!projectUuid || !serverUuid) {
         throw new ApiError('Project/Server Coolify belum kepilih.', 'MISSING_PROJECT_OR_SERVER');
       }
-      const created = await createCoolifyPublicApplication({
+
+      const shared = {
         project_uuid: projectUuid,
         server_uuid: serverUuid,
         environment_name: 'production',
-        git_repository: gitRepo.trim(),
         git_branch: branch.trim() || 'main',
         build_pack: buildPack,
         ports_exposes: port.trim(),
         name: name.trim() || undefined,
         base_directory: baseDirectory.trim() || undefined,
         domains: domains.trim() || undefined,
-      });
+      };
+
+      const created =
+        visibility === 'private'
+          ? await (async () => {
+              if (!githubAppUuid) {
+                throw new ApiError('GitHub App belum kepilih.', 'MISSING_GITHUB_APP');
+              }
+              return createCoolifyPrivateGithubApplication({
+                ...shared,
+                github_app_uuid: githubAppUuid,
+                git_repository: gitRepo.trim(),
+              });
+            })()
+          : await createCoolifyPublicApplication({
+              ...shared,
+              git_repository: gitRepo.trim(),
+            });
 
       // Parse textarea KEY=VALUE jadi array - Coolify gak terima raw .env
       // blob (beda dari vps-manager yang terima envContent apa adanya).
@@ -115,11 +145,15 @@ export default function NewCoolifyDeployScreen() {
 
   function handleSubmit() {
     if (!gitRepo.trim()) {
-      Alert.alert('Belum lengkap', 'Git repository wajib diisi.');
+      Alert.alert('Belum lengkap', visibility === 'private' ? 'Repo (format owner/repo) wajib diisi.' : 'Git repository wajib diisi.');
       return;
     }
     if (!projectUuid || !serverUuid) {
       Alert.alert('Belum lengkap', 'Project dan Server Coolify wajib kepilih (lihat di atas form).');
+      return;
+    }
+    if (visibility === 'private' && !githubAppUuid) {
+      Alert.alert('Belum lengkap', 'GitHub App wajib kepilih buat repo private.');
       return;
     }
     if (portOutOfRange) {
@@ -160,13 +194,47 @@ export default function NewCoolifyDeployScreen() {
       )}
 
       <Card>
+        <Text style={styles.label}>Visibilitas Repo</Text>
+        <View style={styles.modeRow}>
+          <Button label="Public" variant={visibility === 'public' ? 'primary' : 'secondary'} onPress={() => setVisibility('public')} />
+          <Button label="Private (GitHub App)" variant={visibility === 'private' ? 'primary' : 'secondary'} onPress={() => setVisibility('private')} />
+        </View>
+        {visibility === 'private' && (
+          <>
+            {githubAppsQuery.isLoading && <Text style={styles.hintText}>Memuat daftar GitHub App...</Text>}
+            {githubAppsQuery.isError && (
+              <Text style={[styles.hintText, { color: colors.red }]}>
+                Gagal ambil GitHub App: {(githubAppsQuery.error as Error)?.message}
+              </Text>
+            )}
+            {!githubAppsQuery.isLoading && (githubAppsQuery.data?.length ?? 0) === 0 && (
+              <Text style={[styles.hintText, { color: colors.amber }]}>
+                Belum ada GitHub App terhubung ke Coolify. Setup dulu di dashboard Coolify (Settings/Sources) sebelum
+                bisa deploy repo private.
+              </Text>
+            )}
+            {needsGithubAppPick && (
+              <PickerRow
+                label="GitHub App"
+                options={(githubAppsQuery.data ?? []).map((a) => ({ value: a.uuid, label: a.name }))}
+                value={manualGithubAppUuid}
+                onChange={setManualGithubAppUuid}
+              />
+            )}
+          </>
+        )}
+      </Card>
+
+      <Card>
         <FormField label="Nama Application" placeholder="web-desa" value={name} onChangeText={setName} />
         <FormField
           label="Git Repository"
-          placeholder="https://github.com/user/repo"
-          keyboardType="url"
+          placeholder={visibility === 'private' ? 'owner/nama-repo (BUKAN URL lengkap)' : 'https://github.com/user/repo'}
+          keyboardType={visibility === 'private' ? 'default' : 'url'}
+          autoCapitalize="none"
           value={gitRepo}
           onChangeText={setGitRepo}
+          hint={visibility === 'private' ? 'Format khusus: owner/repo, beda dari mode Public yang pakai URL lengkap.' : undefined}
         />
         <FormField label="Branch" placeholder="main" value={branch} onChangeText={setBranch} />
         <FormField
@@ -258,5 +326,6 @@ const styles = StyleSheet.create({
   introCard: { backgroundColor: colors.blueSoft, borderColor: colors.blueSoft },
   intro: { fontSize: 12.5, color: colors.inkMuted, lineHeight: 18 },
   label: { fontSize: 12, fontWeight: '700', color: colors.inkMuted, marginBottom: spacing.sm },
+  hintText: { fontSize: 11.5, color: colors.inkFaint, marginTop: spacing.xs, lineHeight: 16 },
   modeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 });

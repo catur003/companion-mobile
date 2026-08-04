@@ -172,6 +172,59 @@ export async function createCoolifyPublicApplication(
   }
 }
 
+// ===================== Private Repo (GitHub App) =====================
+
+export interface CoolifyGithubApp {
+  uuid: string;
+  name: string;
+  [key: string]: unknown;
+}
+
+export async function listCoolifyGithubApps(): Promise<CoolifyGithubApp[]> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get('/github-apps');
+    return res.data;
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil daftar GitHub App di Coolify.');
+  }
+}
+
+export interface CreatePrivateGithubAppPayload {
+  project_uuid: string;
+  server_uuid: string;
+  environment_name: string;
+  github_app_uuid: string;
+  /** Format "owner/repo" (BUKAN URL lengkap) - beda dari applications/public yang minta URL penuh. */
+  git_repository: string;
+  git_branch: string;
+  build_pack: 'nixpacks' | 'static' | 'dockerfile' | 'dockercompose';
+  ports_exposes: string;
+  name?: string;
+  base_directory?: string;
+  domains?: string;
+}
+
+/**
+ * BELUM DIVERIFIKASI ke instance nyata, PLUS ada bug yang dilaporkan komunitas
+ * Coolify (GitHub issue #4864, #3209): github_app_uuid dari GET /github-apps
+ * KADANG beda dari UUID yang diterima endpoint create ("Github App not
+ * found" walau UUID-nya bener dari listing). Kalau kejadian, workaround yang
+ * dilaporkan orang lain: ambil UUID dari URL dashboard Coolify pas buka
+ * halaman GitHub App itu (Settings > Source), bukan dari response API.
+ */
+export async function createCoolifyPrivateGithubApplication(
+  payload: CreatePrivateGithubAppPayload
+): Promise<{ uuid: string }> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.post('/applications/private-github-app', payload);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err, 'Gagal bikin application (private repo) di Coolify.');
+  }
+}
+
 /**
  * Bulk-set env vars setelah app dibuat. Coolify gak terima raw .env blob
  * lewat endpoint create - wajib array {key, value}, jadi parsing dari
