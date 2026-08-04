@@ -9,6 +9,7 @@ import { AuroraBackground } from '@/components/AuroraBackground';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useTabTopPadding } from '@/lib/useTopInset';
 import { listJobs, Job } from '@/lib/api';
+import { isCompanionConfigured } from '@/lib/storage';
 
 const TYPE_LABEL: Record<string, string> = {
   deploy_nextjs: 'Deploy',
@@ -30,6 +31,11 @@ export default function JobsScreen() {
     queryKey: ['jobs'],
     queryFn: listJobs,
     refetchInterval: 8000,
+  });
+  const companionConfigured = useQuery({
+    queryKey: ['companion-configured'],
+    queryFn: isCompanionConfigured,
+    staleTime: 5000,
   });
 
   const jobs = data ?? [];
@@ -71,6 +77,17 @@ export default function JobsScreen() {
                 <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
               </View>
             </Card>
+            {companionConfigured.data === true && (
+              <Card onPress={() => router.push('/(tabs)/deploy/coolify-files')} style={styles.coolifyLink}>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.type}>COOLIFY</Text>
+                    <Text style={styles.name}>File Viewer PORTOFOLIO (Beta)</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+                </View>
+              </Card>
+            )}
             <Text style={styles.sectionTitle}>{isLoading ? 'Memuat...' : `${jobs.length} Job`}</Text>
           </>
         }
@@ -128,6 +145,7 @@ const styles = StyleSheet.create({
   domainLink: { borderColor: colors.accentPinkSoft, backgroundColor: colors.accentPinkSoft },
   nginxLink: { borderColor: colors.accentSoft, backgroundColor: colors.accentSoft },
   backupLink: { borderColor: colors.blueSoft, backgroundColor: colors.blueSoft },
+  coolifyLink: { borderColor: colors.greenSoft, backgroundColor: colors.greenSoft },
   fab: {
     width: 54,
     height: 54,

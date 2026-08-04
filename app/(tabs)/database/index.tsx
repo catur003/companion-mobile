@@ -9,6 +9,7 @@ import { AuroraBackground } from '@/components/AuroraBackground';
 import { colors, spacing } from '@/lib/theme';
 import { useTabTopPadding } from '@/lib/useTopInset';
 import { listDatabases, testDatabaseConnection, ApiError } from '@/lib/api';
+import { isCompanionConfigured } from '@/lib/storage';
 
 export default function DatabaseListScreen() {
   const router = useRouter();
@@ -16,6 +17,12 @@ export default function DatabaseListScreen() {
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['databases'],
     queryFn: listDatabases,
+  });
+
+  const companionConfigured = useQuery({
+    queryKey: ['companion-configured'],
+    queryFn: isCompanionConfigured,
+    staleTime: 5000,
   });
 
   const testMutation = useMutation({
@@ -45,6 +52,17 @@ export default function DatabaseListScreen() {
                 <Button label="Test Koneksi" variant="secondary" loading={testMutation.isPending} onPress={() => testMutation.mutate()} />
               </View>
             </Card>
+            {companionConfigured.data === true && (
+              <Card onPress={() => router.push('/(tabs)/database/coolify-query')} style={styles.coolifyLink}>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>Coolify SQL Query (Beta)</Text>
+                    <Text style={styles.meta}>PORTOFOLIO — SELECT-only, raw hasil</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+                </View>
+              </Card>
+            )}
             <Text style={styles.sectionTitle}>{isLoading ? 'Memuat...' : `${databases.length} Database`}</Text>
           </>
         }
@@ -88,4 +106,5 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '700', color: colors.ink },
   meta: { fontSize: 11.5, color: colors.inkFaint, marginTop: 2 },
   fabWrap: { position: 'absolute', right: spacing.lg, bottom: spacing.lg },
+  coolifyLink: { borderColor: colors.blueSoft, backgroundColor: colors.blueSoft },
 });
