@@ -230,10 +230,10 @@ export async function createCoolifyPrivateGithubApplication(
  * lewat endpoint create - wajib array {key, value}, jadi parsing dari
  * textarea dilakukan di layar pemanggil (coolify-new.tsx), bukan di sini.
  *
- * PALING GAK PASTI dari semua fungsi baru di file ini - payload key "envs"
- * diambil dari 1 referensi implementasi pihak ketiga (MCP wrapper), BUKAN
- * dari OpenAPI spec resmi Coolify yang saya baca lengkap. Kalau gagal
- * dengan pesan error soal format body, ini yang pertama dicurigai salah.
+ * CONFIRMED via error nyata (4 Agustus 2026): payload key yang bener "data",
+ * BUKAN "envs" (percobaan pertama gagal persis "data is required" - sesuai
+ * peringatan yang udah ditulis di sini sebelumnya, referensi pihak ketiga
+ * yang dipakai ternyata salah).
  */
 export async function setCoolifyApplicationEnvsBulk(
   applicationUuid: string,
@@ -242,7 +242,7 @@ export async function setCoolifyApplicationEnvsBulk(
   if (envs.length === 0) return;
   const c = await coolifyClient();
   try {
-    await c.patch(`/applications/${encodeURIComponent(applicationUuid)}/envs/bulk`, { envs });
+    await c.patch(`/applications/${encodeURIComponent(applicationUuid)}/envs/bulk`, { data: envs });
   } catch (err) {
     throw toApiError(err, 'App berhasil dibuat, tapi gagal set environment variables.');
   }
