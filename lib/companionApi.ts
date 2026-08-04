@@ -90,6 +90,18 @@ export async function readContainerFile(applicationUuid: string, path: string): 
   return unwrap(c.get('/files', { params: { applicationUuid, path } }));
 }
 
+export interface DirectoryEntry {
+  name: string;
+  isDirectory: boolean;
+  raw: string;
+}
+
+/** GET /files/list - list isi folder, buat file explorer (gak perlu user ngetik nama file). */
+export async function listContainerDirectory(applicationUuid: string, path: string): Promise<{ path: string; entries: DirectoryEntry[] }> {
+  const c = await companionClient();
+  return unwrap(c.get('/files/list', { params: { applicationUuid, path } }));
+}
+
 /** MENIMPA isi file di container - destruktif, backend minta confirmed:true (lihat commandPolicy.js). */
 export async function writeContainerFile(applicationUuid: string, path: string, content: string): Promise<void> {
   const c = await companionClient();

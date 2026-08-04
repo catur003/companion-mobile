@@ -26,6 +26,8 @@ export default function DeployStackLayout() {
       <Stack.Screen name="coolify-files" options={{ title: 'File Viewer Coolify (Beta)', presentation: 'modal' }} />
       <Stack.Screen name="coolify-new" options={{ title: 'Deploy Baru (Coolify Beta)', presentation: 'modal' }} />
       <Stack.Screen name="coolify-logs" options={{ title: 'Log Coolify (Beta)', presentation: 'modal' }} />
+      <Stack.Screen name="coolify-env" options={{ title: 'Env Vars Coolify (Beta)', presentation: 'modal' }} />
+      <Stack.Screen name="coolify-migrate" options={{ title: 'DB Push/Seed (Beta)', presentation: 'modal' }} />
       <Stack.Screen name="[jobId]/index" options={{ title: 'Detail Job' }} />
       <Stack.Screen name="[jobId]/retry" options={{ title: 'Retry Deploy', presentation: 'modal' }} />
       <Stack.Screen name="nginx/index" options={{ title: 'Site Nginx' }} />

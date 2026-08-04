@@ -18,12 +18,13 @@ import { getApplicationRestartCount } from '@/lib/companionApi';
 
 type ActionKind = 'start' | 'stop' | 'restart';
 
-// "start" (deploy penuh: install+build) butuh jauh lebih lama dari
-// "restart"/"stop" (cuma proses container) - disamain 20 detik dulu ternyata
-// kependekan buat deploy Next.js beneran (temuan user, 4 Agustus 2026).
+// "start" DAN "restart" dua-duanya trigger REDEPLOY PENUH buat app berbasis
+// Git (Nixpacks) - dikonfirmasi dari dokumentasi resmi Coolify: restart
+// "For git-based applications, this triggers a redeployment" (BUKAN cuma
+// restart proses kayak asumsi awal). Cuma "stop" yang beneran ringan.
 const SETTLE_MS: Record<ActionKind, number> = {
   start: 90000,
-  restart: 20000,
+  restart: 90000,
   stop: 15000,
 };
 
@@ -83,7 +84,7 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
     setPending(kind);
     try {
       const result = await fn();
-      if (kind === 'start' && result && 'deployment_uuid' in result && result.deployment_uuid) {
+      if ((kind === 'start' || kind === 'restart') && result && 'deployment_uuid' in result && result.deployment_uuid) {
         setLastDeploymentUuid(result.deployment_uuid);
       }
       setSettling(true);
@@ -129,6 +130,7 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
           <Text style={styles.name}>{name}</Text>
           <Text style={styles.meta}>
             Coolify
+            {appQuery.data?.fqdn ? ` · ${appQuery.data.fqdn.replace(/^https?:\/\//, '')}` : ''}
             {restartCount != null ? (
               <Text style={restartWarn ? { color: restartWarn, fontWeight: '700' } : undefined}>
                 {' · '}Restart {restartCount}x

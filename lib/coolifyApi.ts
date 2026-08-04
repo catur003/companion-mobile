@@ -69,6 +69,24 @@ export async function getCoolifyApplicationLogs(applicationUuid: string, lines =
   }
 }
 
+export interface CoolifyEnv {
+  uuid?: string;
+  key: string;
+  value: string;
+  [key: string]: unknown;
+}
+
+/** GET /applications/{uuid}/envs - belum divalidasi field exact-nya (dokumentasi cuma bilang "all environment variables", gak kasih schema detail), tapi "key"/"value" cukup pasti karena konsisten sama bulk update yang udah confirmed. */
+export async function getCoolifyApplicationEnvs(applicationUuid: string): Promise<CoolifyEnv[]> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get(`/applications/${encodeURIComponent(applicationUuid)}/envs`);
+    return res.data ?? [];
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil environment variables dari Coolify.');
+  }
+}
+
 /**
  * Log PROSES BUILD/DEPLOY (npm install, next build, dst) - beda dari
  * getCoolifyApplicationLogs (itu runtime stdout/stderr app yang lagi jalan).
@@ -120,10 +138,11 @@ export async function stopCoolifyApplication(applicationUuid: string): Promise<v
   }
 }
 
-export async function restartCoolifyApplication(applicationUuid: string): Promise<void> {
+export async function restartCoolifyApplication(applicationUuid: string): Promise<{ deployment_uuid?: string }> {
   const c = await coolifyClient();
   try {
-    await c.post(`/applications/${encodeURIComponent(applicationUuid)}/restart`);
+    const res = await c.post(`/applications/${encodeURIComponent(applicationUuid)}/restart`);
+    return res.data ?? {};
   } catch (err) {
     throw toApiError(err, 'Gagal restart aplikasi di Coolify.');
   }
