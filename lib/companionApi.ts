@@ -70,26 +70,30 @@ export interface RestartCountResult {
   containerState: string;
 }
 
-/** GET /containers/:id/restart-count - fallback kalau Coolify API sendiri gak expose ini. */
-export async function getContainerRestartCount(containerId: string): Promise<RestartCountResult> {
+/**
+ * GET /applications/:uuid/restart-count - fallback kalau Coolify API sendiri
+ * gak expose ini bagus. UBAH (4 Agustus 2026): pakai applicationUuid Coolify
+ * (stabil), BUKAN container ID Docker mentah - container ID berubah tiap
+ * redeploy, backend resolve container aktif sendiri tiap request.
+ */
+export async function getApplicationRestartCount(applicationUuid: string): Promise<RestartCountResult> {
   const c = await companionClient();
-  return unwrap(c.get(`/containers/${encodeURIComponent(containerId)}/restart-count`));
+  return unwrap(c.get(`/applications/${encodeURIComponent(applicationUuid)}/restart-count`));
 }
 
 // ===================== File Manager =====================
-// "container" WAJIB Container ID/nama Docker asli (dari Coolify), BUKAN nama
-// project manusia - gak ada volume per-project yang bisa dipetakan dari nama
-// project (temuan Fase 1: app container stateless, lihat DEPLOYMENT-NOTES.md).
+// UBAH (4 Agustus 2026): "applicationUuid" (Coolify, stabil), BUKAN container
+// ID Docker mentah lagi - alasan sama kayak restart-count di atas.
 
-export async function readContainerFile(container: string, path: string): Promise<{ content: string }> {
+export async function readContainerFile(applicationUuid: string, path: string): Promise<{ content: string }> {
   const c = await companionClient();
-  return unwrap(c.get('/files', { params: { container, path } }));
+  return unwrap(c.get('/files', { params: { applicationUuid, path } }));
 }
 
 /** MENIMPA isi file di container - destruktif, backend minta confirmed:true (lihat commandPolicy.js). */
-export async function writeContainerFile(container: string, path: string, content: string): Promise<void> {
+export async function writeContainerFile(applicationUuid: string, path: string, content: string): Promise<void> {
   const c = await companionClient();
-  await unwrap<void>(c.put('/files', { content, confirmed: true }, { params: { container, path } }));
+  await unwrap<void>(c.put('/files', { content, confirmed: true }, { params: { applicationUuid, path } }));
 }
 
 // ===================== DB Query =====================

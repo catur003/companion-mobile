@@ -12,7 +12,7 @@ import {
   stopCoolifyApplication,
   restartCoolifyApplication,
 } from '@/lib/coolifyApi';
-import { getContainerRestartCount } from '@/lib/companionApi';
+import { getApplicationRestartCount } from '@/lib/companionApi';
 
 type ActionKind = 'start' | 'stop' | 'restart';
 
@@ -20,8 +20,13 @@ type ActionKind = 'start' | 'stop' | 'restart';
  * Mirror PmAppCard.tsx SENGAJA - "workflow biar sama" (request user). Beda
  * utamanya: data status dari Coolify API (getCoolifyApplication) sementara
  * restart-count dari Companion API (docker.js) - 2 backend beda, 1 card.
+ *
+ * UBAH (4 Agustus 2026): dulu terima containerId terpisah - dihapus, cukup
+ * applicationUuid buat SEMUANYA (Coolify status + Companion API restart-count).
+ * Container ID Docker mentah BERUBAH tiap redeploy, applicationUuid Coolify
+ * TETAP - backend Companion API resolve container aktif sendiri sekarang.
  */
-export function CoolifyAppCard({ name, applicationUuid, containerId }: { name: string; applicationUuid: string; containerId: string }) {
+export function CoolifyAppCard({ name, applicationUuid }: { name: string; applicationUuid: string }) {
   const qc = useQueryClient();
   const [pending, setPending] = useState<ActionKind | null>(null);
   const busy = pending !== null;
@@ -32,14 +37,14 @@ export function CoolifyAppCard({ name, applicationUuid, containerId }: { name: s
     refetchInterval: 15000,
   });
   const restartQuery = useQuery({
-    queryKey: ['companion-restart-count', containerId],
-    queryFn: () => getContainerRestartCount(containerId),
+    queryKey: ['companion-restart-count', applicationUuid],
+    queryFn: () => getApplicationRestartCount(applicationUuid),
     refetchInterval: 15000,
   });
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['coolify-app', applicationUuid] });
-    qc.invalidateQueries({ queryKey: ['companion-restart-count', containerId] });
+    qc.invalidateQueries({ queryKey: ['companion-restart-count', applicationUuid] });
   }
 
   async function run(kind: ActionKind, fn: () => Promise<void>) {

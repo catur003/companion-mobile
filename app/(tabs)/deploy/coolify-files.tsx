@@ -8,17 +8,19 @@ import { colors, spacing } from '@/lib/theme';
 import { readContainerFile } from '@/lib/companionApi';
 import { ApiError } from '@/lib/api';
 
-// TEMPORARY (Fase 4, baru PORTOFOLIO) - sama pola kayak PORTOFOLIO_CONTAINER_ID
-// di Dashboard. Root default container Companion API: /app (Nixpacks) - path
-// yang diisi di sini RELATIF ke root itu, bukan absolut.
-const PORTOFOLIO_CONTAINER_ID = '76a134667c97';
+// TEMPORARY (Fase 4, baru PORTOFOLIO) - sama pola kayak PORTOFOLIO_APPLICATION_UUID
+// di Dashboard. UBAH (4 Agustus 2026): pakai applicationUuid Coolify (stabil),
+// BUKAN container ID Docker mentah lagi - itu berubah tiap redeploy. Root
+// default container Companion API: /app (Nixpacks) - path yang diisi di sini
+// RELATIF ke root itu, bukan absolut.
+const PORTOFOLIO_APPLICATION_UUID = 'bxpbj2db8xneyfquv7o9l1bk';
 
 export default function CoolifyFileViewerScreen() {
   const [path, setPath] = useState('package.json');
   const [content, setContent] = useState<string | null>(null);
 
   const readMutation = useMutation({
-    mutationFn: () => readContainerFile(PORTOFOLIO_CONTAINER_ID, path),
+    mutationFn: () => readContainerFile(PORTOFOLIO_APPLICATION_UUID, path),
     onSuccess: (res) => setContent(res.content),
     onError: (err) => {
       setContent(null);

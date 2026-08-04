@@ -16,12 +16,11 @@ import { getMonitorStatus, listPm2Apps, savePm2Startup, ApiError } from '@/lib/a
 import { CoolifyAppCard } from '@/components/CoolifyAppCard';
 import { isCoolifyConfigured } from '@/lib/storage';
 
-// TEMPORARY (Fase 4, baru PORTOFOLIO yang pindah ke Coolify): container ID +
-// applicationUuid di-hardcode di sini, BUKAN nama project - gak ada
-// pemetaan nama project ke container/app yang bisa ditebak (temuan Fase 1,
-// lihat DEPLOYMENT-NOTES.md di companion-api). Begitu Fase 5 jalan (project
-// lain ikut pindah), ini WAJIB diganti jadi daftar dinamis.
-const PORTOFOLIO_CONTAINER_ID = '76a134667c97';
+// TEMPORARY (Fase 4, baru PORTOFOLIO yang pindah ke Coolify): applicationUuid
+// di-hardcode di sini, BUKAN nama project - gak ada pemetaan nama project ke
+// app Coolify yang bisa ditebak otomatis. Begitu Fase 5 jalan (project lain
+// ikut pindah), ini WAJIB diganti jadi daftar dinamis, bukan ditambah
+// satu-satu manual di sini.
 // UUID application PORTOFOLIO di Coolify (confirmed 4 Agustus 2026 via
 // GET /api/v1/applications - cocok juga dengan subdomain sslip.io default-nya).
 const PORTOFOLIO_APPLICATION_UUID = 'bxpbj2db8xneyfquv7o9l1bk';
@@ -196,7 +195,6 @@ export default function DashboardScreen() {
           <CoolifyAppCard
             name="PORTOFOLIO"
             applicationUuid={PORTOFOLIO_APPLICATION_UUID}
-            containerId={PORTOFOLIO_CONTAINER_ID}
           />
         </>
       )}
