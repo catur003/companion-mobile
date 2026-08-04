@@ -13,6 +13,15 @@ import { colors, spacing, radius } from '@/lib/theme';
 import { useTabTopPadding } from '@/lib/useTopInset';
 import { pushIntoTab } from '@/lib/nav';
 import { getMonitorStatus, listPm2Apps, savePm2Startup, ApiError } from '@/lib/api';
+import { getContainerRestartCount } from '@/lib/companionApi';
+import { isCompanionConfigured } from '@/lib/storage';
+
+// TEMPORARY (Fase 4, baru PORTOFOLIO yang pindah ke Coolify): container ID
+// di-hardcode di sini, BUKAN nama project - gak ada pemetaan nama project ke
+// container yang bisa ditebak (temuan Fase 1, lihat DEPLOYMENT-NOTES.md di
+// companion-api). Begitu Fase 5 jalan (project lain ikut pindah), ini WAJIB
+// diganti jadi daftar dinamis, bukan ditambah satu-satu manual di sini.
+const PORTOFOLIO_CONTAINER_ID = '76a134667c97';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -26,6 +35,21 @@ export default function DashboardScreen() {
     queryKey: ['pm2-apps'],
     queryFn: listPm2Apps,
     refetchInterval: 10000,
+  });
+
+  // Companion API (Coolify) - independen dari query vps-manager di atas.
+  // enabled: false kalau belum dikonfigurasi di Settings, biar gak spam
+  // request gagal terus-terusan buat user yang belum migrasi apapun.
+  const companionConfigured = useQuery({
+    queryKey: ['companion-configured'],
+    queryFn: isCompanionConfigured,
+    staleTime: 5000,
+  });
+  const portofolioRestart = useQuery({
+    queryKey: ['companion-restart-count', PORTOFOLIO_CONTAINER_ID],
+    queryFn: () => getContainerRestartCount(PORTOFOLIO_CONTAINER_ID),
+    refetchInterval: 15000,
+    enabled: companionConfigured.data === true,
   });
 
   const { data, isLoading, isError, error, refetch, isRefetching } = monitor;
@@ -167,6 +191,31 @@ export default function DashboardScreen() {
           {pm2Apps.data!.warnings.join(' | ')}
         </Text>
       )}
+
+      {companionConfigured.data === true && (
+        <>
+          <Text style={styles.sectionTitle}>Coolify (Beta)</Text>
+          <Card>
+            <View style={styles.coolifyRow}>
+              <View style={[styles.coolifyIconWrap, { backgroundColor: colors.blueSoft }]}>
+                <Ionicons name="cube-outline" size={18} color={colors.blue} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitleStrong}>PORTOFOLIO</Text>
+                <Text style={styles.mutedText}>
+                  {portofolioRestart.isLoading
+                    ? 'Memuat status...'
+                    : portofolioRestart.isError
+                      ? `Gagal: ${(portofolioRestart.error as Error)?.message ?? 'unknown error'}`
+                      : `Status: ${portofolioRestart.data?.containerState ?? '—'} · Restart: ${
+                          portofolioRestart.data?.restartCount ?? '-'
+                        }`}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        </>
+      )}
       </ScrollView>
     </View>
   );
@@ -232,5 +281,8 @@ const styles = StyleSheet.create({
   quickIconWrap: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   quickLabel: { fontSize: 13, fontWeight: '700', color: colors.ink },
   mutedText: { fontSize: 13, color: colors.inkMuted },
+  coolifyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  coolifyIconWrap: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  rowTitleStrong: { fontSize: 14, fontWeight: '700', color: colors.ink },
   warningText: { fontSize: 11, color: colors.amber, marginTop: spacing.xs, lineHeight: 16 },
 });
