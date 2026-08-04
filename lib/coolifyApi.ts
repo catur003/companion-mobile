@@ -94,6 +94,7 @@ export interface CoolifyDeploymentSummary {
   application_name: string;
   status: string;
   deployment_url: string;
+  id: number; // dipakai buat nentuin mana yang "paling baru" kalau ada >1 match aktif
 }
 
 /**
@@ -109,27 +110,45 @@ function extractApplicationUuidFromDeploymentUrl(url: string): string | null {
   return match ? match[1] : null;
 }
 
+const ACTIVE_DEPLOYMENT_STATUSES = ['in_progress', 'queued'];
+
 export async function listActiveDeployments(): Promise<CoolifyDeploymentSummary[]> {
   const c = await coolifyClient();
   try {
     const res = await c.get('/deployments');
     const raw = Array.isArray(res.data) ? res.data : [];
-    return raw.map((d: Record<string, unknown>) => ({
-      deployment_uuid: String(d.deployment_uuid),
-      application_uuid: extractApplicationUuidFromDeploymentUrl(String(d.deployment_url ?? '')),
-      application_name: String(d.application_name ?? ''),
-      status: String(d.status ?? ''),
-      deployment_url: String(d.deployment_url ?? ''),
-    }));
+    return raw
+      .map((d: Record<string, unknown>) => ({
+        deployment_uuid: String(d.deployment_uuid),
+        application_uuid: extractApplicationUuidFromDeploymentUrl(String(d.deployment_url ?? '')),
+        application_name: String(d.application_name ?? ''),
+        status: String(d.status ?? ''),
+        deployment_url: String(d.deployment_url ?? ''),
+        id: Number(d.id ?? 0),
+      }))
+      // FIX (5 Agustus 2026, bug nyata: badge "Deploy..." nyangkut terus):
+      // SEBELUMNYA gak ada filter status di sini sama sekali - percaya
+      // buta endpoint /deployments cuma ngasih yang aktif. Ternyata
+      // deployment yang udah "finished" JUGA ikut muncul di list yang sama
+      // (kebukti dari observasi tes curl sebelumnya). Filter eksplisit di
+      // sini, jangan percaya endpoint doang.
+      .filter((d) => ACTIVE_DEPLOYMENT_STATUSES.includes(d.status));
   } catch (err) {
     throw toApiError(err, 'Gagal ambil daftar deployment dari Coolify.');
   }
 }
 
-/** Cari deployment yang lagi aktif (in_progress/queued) buat 1 applicationUuid tertentu - dari daftar umum, bukan endpoint per-app (itu balikin kosong di tes nyata, lihat 3.4a). */
+/**
+ * Cari deployment aktif buat 1 app. FIX: kalau ada LEBIH DARI 1 match (edge
+ * case, harusnya jarang), ambil yang "id" numeriknya PALING BESAR (paling
+ * baru) - bukan asal .find() pertama ketemu, karena urutan array dari API
+ * gak dijamin newest-first.
+ */
 export async function findActiveDeploymentForApp(applicationUuid: string): Promise<CoolifyDeploymentSummary | null> {
   const all = await listActiveDeployments();
-  return all.find((d) => d.application_uuid === applicationUuid) ?? null;
+  const matches = all.filter((d) => d.application_uuid === applicationUuid);
+  if (matches.length === 0) return null;
+  return matches.reduce((newest, d) => (d.id > newest.id ? d : newest));
 }
 
 export interface DeploymentLogStep {
@@ -174,21 +193,21 @@ export async function getDeploymentDetail(deploymentUuid: string): Promise<Deplo
   }
 }
 
-export interface CoolifyServerValidation {
-  ssh_ok?: boolean;
-  docker_ok?: boolean;
-  message?: string;
-  [key: string]: unknown;
-}
-
-/** GET /servers/{uuid}/validate - cek konektivitas SSH + Docker Engine, LANGSUNG dari Coolify API, gak butuh backend baru. */
-export async function getServerValidate(serverUuid: string): Promise<CoolifyServerValidation> {
+/**
+ * CONFIRMED (5 Agustus 2026, curl langsung): endpoint ini ASYNC - cuma
+ * balikin {"message": "Validation started."}, TIDAK ADA hasil ssh_ok/
+ * docker_ok instan kayak yang saya asumsikan sebelumnya. Ini cuma nge-
+ * TRIGGER validasi (job background), gak ada cara ambil hasilnya lewat API
+ * yang udah kecek. Fungsi ini sekarang jujur cuma "trigger", bukan
+ * "cek status" - UI pemanggil WAJIB kasih tau user buat cek hasilnya di
+ * dashboard Coolify, bukan pura-pura nampilin status inline.
+ */
+export async function triggerServerValidate(serverUuid: string): Promise<void> {
   const c = await coolifyClient();
   try {
-    const res = await c.get(`/servers/${encodeURIComponent(serverUuid)}/validate`);
-    return res.data ?? {};
+    await c.get(`/servers/${encodeURIComponent(serverUuid)}/validate`);
   } catch (err) {
-    throw toApiError(err, 'Gagal validasi server Coolify.');
+    throw toApiError(err, 'Gagal trigger validasi server Coolify.');
   }
 }
 
@@ -211,12 +230,23 @@ export async function getServerResources(serverUuid: string): Promise<CoolifySer
   }
 }
 
-/** GET /servers/{uuid}/domains - semua domain yang ke-mapping ke server ini. */
+/**
+ * CONFIRMED (5 Agustus 2026, curl langsung): shape aslinya array of
+ * {ip, domains: [...]} - satu entry per IP server, "domains" isinya array
+ * FQDN string. Flatten semua entry jadi 1 list flat.
+ */
 export async function getServerDomains(serverUuid: string): Promise<string[]> {
   const c = await coolifyClient();
   try {
     const res = await c.get(`/servers/${encodeURIComponent(serverUuid)}/domains`);
-    return Array.isArray(res.data) ? res.data.map(String) : [];
+    const raw = Array.isArray(res.data) ? res.data : [];
+    const flat: string[] = [];
+    for (const entry of raw) {
+      if (entry && typeof entry === 'object' && Array.isArray((entry as { domains?: unknown }).domains)) {
+        flat.push(...(entry as { domains: string[] }).domains);
+      }
+    }
+    return flat;
   } catch (err) {
     throw toApiError(err, 'Gagal ambil daftar domain server Coolify.');
   }

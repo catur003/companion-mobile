@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -17,7 +18,7 @@ import {
   scanFull,
   getDoctorPermissions,
 } from '@/lib/api';
-import { getServerValidate, getServerResources, getServerDomains, listCoolifyServers } from '@/lib/coolifyApi';
+import { triggerServerValidate, getServerResources, getServerDomains, listCoolifyServers } from '@/lib/coolifyApi';
 import { isCoolifyConfigured } from '@/lib/storage';
 
 export default function DiagnostikScreen() {
@@ -40,10 +41,14 @@ export default function DiagnostikScreen() {
     enabled: coolifyConfigured.data === true,
   });
   const coolifyServerUuid = coolifyServersQuery.data?.[0]?.uuid; // auto-pick kalau cuma 1, sama pola kayak fitur lain
-  const coolifyValidateQuery = useQuery({
-    queryKey: ['coolify-validate', coolifyServerUuid],
-    queryFn: () => getServerValidate(coolifyServerUuid!),
-    enabled: Boolean(coolifyServerUuid),
+  // FIX (5 Agustus 2026, confirmed via curl): /validate itu ASYNC, cuma
+  // balikin {"message":"Validation started."} - GAK ADA hasil ssh_ok/
+  // docker_ok instan. Ganti dari "query status" jadi "trigger + kasih tau
+  // cek hasilnya di dashboard Coolify" - jujur soal keterbatasannya.
+  const [validateTriggered, setValidateTriggered] = useState(false);
+  const validateMutation = useMutation({
+    mutationFn: () => triggerServerValidate(coolifyServerUuid!),
+    onSuccess: () => setValidateTriggered(true),
   });
   const coolifyResourcesQuery = useQuery({
     queryKey: ['coolify-resources', coolifyServerUuid],
@@ -56,7 +61,7 @@ export default function DiagnostikScreen() {
     enabled: Boolean(coolifyServerUuid),
   });
 
-  const refreshing = firewall.isRefetching || fail2ban.isRefetching || ssh.isRefetching || ports.isRefetching || doctor.isRefetching || coolifyValidateQuery.isRefetching;
+  const refreshing = firewall.isRefetching || fail2ban.isRefetching || ssh.isRefetching || ports.isRefetching || doctor.isRefetching;
   const onRefresh = () => {
     firewall.refetch();
     fail2ban.refetch();
@@ -64,7 +69,6 @@ export default function DiagnostikScreen() {
     ports.refetch();
     doctor.refetch();
     if (coolifyServerUuid) {
-      coolifyValidateQuery.refetch();
       coolifyResourcesQuery.refetch();
       coolifyDomainsQuery.refetch();
     }
@@ -322,25 +326,18 @@ export default function DiagnostikScreen() {
         <>
           <Text style={styles.sectionTitle}>Coolify</Text>
           <Card>
-            <Row
-              label="Server"
-              right={
-                coolifyValidateQuery.isLoading ? (
-                  <Text style={styles.mutedText}>Mengecek...</Text>
-                ) : coolifyValidateQuery.isError ? (
-                  <Text style={styles.errorTextSmall}>Gagal cek</Text>
-                ) : (
-                  <StatusPill status={coolifyValidateQuery.data?.docker_ok && coolifyValidateQuery.data?.ssh_ok ? 'online' : 'stopped'} />
-                )
-              }
+            <Row label="Server" right={<Text style={styles.mutedText}>Cek async</Text>} />
+            <Text style={styles.subtext}>
+              Coolify gak kasih hasil instan buat cek SSH/Docker sehat lewat API (dikonfirmasi: endpoint-nya cuma
+              nge-trigger job background, gak ada status yang bisa dibaca balik). Tombol di bawah cuma
+              MEMICU validasi - hasilnya cek manual di dashboard Coolify (Settings → Servers).
+            </Text>
+            <Button
+              label={validateTriggered ? 'Validasi Dipicu (cek di Coolify)' : 'Trigger Validasi Server'}
+              variant="secondary"
+              loading={validateMutation.isPending}
+              onPress={() => validateMutation.mutate()}
             />
-            <View style={styles.checkRow}>
-              <CheckChip label="SSH" value={coolifyValidateQuery.data?.ssh_ok ?? null} />
-              <CheckChip label="Docker" value={coolifyValidateQuery.data?.docker_ok ?? null} />
-            </View>
-            {coolifyValidateQuery.data?.message ? (
-              <Text style={styles.subtext}>{coolifyValidateQuery.data.message}</Text>
-            ) : null}
           </Card>
 
           <Card>
