@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Pressable, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable, FlatList, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { colors, spacing, radius } from '@/lib/theme';
@@ -12,19 +13,30 @@ import {
   DeploymentLogStep,
 } from '@/lib/coolifyApi';
 import { listRegisteredProjects } from '@/lib/companionApi';
-import { ApiError } from '@/lib/api';
 
 const ACTIVE_STATUSES = ['in_progress', 'queued'];
+const NEAR_BOTTOM_THRESHOLD = 60;
 
 /**
- * REDESIGN (5 Agustus 2026) - lihat REALTIME-DEPLOY-LOG.md buat riset
- * lengkapnya. Ganti total dari pendekatan lama ("cuma kebaca kalau baru
- * klik Start dari app itu sendiri, session-limited") jadi auto-detect:
- * cari deployment yang lagi aktif buat app ini lewat daftar umum
- * (findActiveDeploymentForApp), polling detailnya tiap 2 detik selama
- * status masih in_progress/queued, render INCREMENTAL (append doang, bukan
- * re-render semua tiap poll) pakai index posisi array (field "order" yang
- * diasumsikan draft awal TERNYATA GAK ADA di API beneran).
+ * REDESIGN (5 Agustus 2026) - lihat REALTIME-DEPLOY-LOG.md. Auto-detect
+ * deployment aktif (bukan lagi session-limited nunggu klik Start dari app
+ * sendiri), render incremental via index array (field "order" gak ada di
+ * API beneran), polling 2 detik.
+ *
+ * UPDATE (5 Agustus 2026, feedback user):
+ * - "Sticky" tracking: deployment_uuid yang udah ketemu TIDAK di-clear
+ *   cuma karena statusnya udah finished - biar buka layar lagi masih liat
+ *   log yang sama, bukan "gak ada deploy aktif". Cuma diganti kalau
+ *   ketemu deployment BARU yang aktif (bukan di-reset asal).
+ * - Status bar warna dinamis (ijo/merah/kuning), pake Ionicons bukan
+ *   emoji/simbol unicode.
+ * - Auto-scroll CUMA jalan kalau user emang lagi di bawah - discroll ke
+ *   atas baca history = berhenti maksa, ada tombol "Lompat ke Terbaru".
+ * - Toggle tampilin/sembunyiin step "hidden" (detail teknis internal).
+ * - Teks log BISA di-select/copy (long-press) - scope CUMA ke baris log,
+ *   BUKAN label tombol (itu tetap non-selectable, biar gak aneh).
+ * - Runtime log sekarang polling otomatis 2 detik selama tab-nya aktif,
+ *   berhenti kalau pindah tab (React Query "enabled" urus otomatis).
  */
 export default function CoolifyLogsScreen() {
   const params = useLocalSearchParams<{ applicationUuid?: string }>();
@@ -40,53 +52,56 @@ export default function CoolifyLogsScreen() {
     null;
 
   const [activeTab, setActiveTab] = useState<'runtime' | 'build'>('build');
+  const [showHidden, setShowHidden] = useState(false);
 
-  // ---- Runtime log (stdout/stderr app yang lagi jalan) - gak berubah dari sebelumnya ----
-  const [runtimeLogs, setRuntimeLogs] = useState<string | null>(null);
-  const loadRuntimeMutation = useMutation({
-    mutationFn: () => {
-      if (!selectedProject) throw new ApiError('Pilih project dulu.', 'NO_PROJECT_SELECTED');
-      return getCoolifyApplicationLogs(selectedProject.applicationUuid, 300);
-    },
-    onSuccess: (res) => setRuntimeLogs(res),
-    onError: (err) => {
-      setRuntimeLogs(null);
-      Alert.alert('Gagal Ambil Log', err instanceof ApiError ? err.message : 'Terjadi kesalahan.');
-    },
+  // ---- Runtime log - sekarang polling otomatis (bukan tombol manual) selama tab ini aktif ----
+  const runtimeQuery = useQuery({
+    queryKey: ['runtime-logs', selectedProject?.applicationUuid],
+    queryFn: () => getCoolifyApplicationLogs(selectedProject!.applicationUuid, 300),
+    enabled: Boolean(selectedProject) && activeTab === 'runtime',
+    refetchInterval: 2000,
   });
 
-  // ---- Build log (deploy yang lagi/baru aja jalan) - auto-detect ----
-  // Cari deployment_uuid yang aktif buat app ini, sekali tiap kali app-nya
-  // ganti (bukan di-polling - itu daftar umum, dipanggil sekali doang).
-  const activeDeploymentQuery = useQuery({
+  // ---- Build log - sticky tracking, gak di-clear cuma karena status finished ----
+  const [trackedDeploymentUuid, setTrackedDeploymentUuid] = useState<string | undefined>();
+
+  useEffect(() => {
+    setTrackedDeploymentUuid(undefined); // ganti project = reset total, itu wajar
+  }, [selectedProject?.applicationUuid]);
+
+  const activeSearchQuery = useQuery({
     queryKey: ['active-deployment', selectedProject?.applicationUuid],
     queryFn: () => findActiveDeploymentForApp(selectedProject!.applicationUuid),
     enabled: Boolean(selectedProject) && activeTab === 'build',
-    refetchInterval: (query) => (query.state.data ? false : 5000), // kalau belum ketemu, coba lagi tiap 5 detik (mungkin baru mulai deploy)
+    refetchInterval: 5000, // tetep dicek berkala, biar deploy baru kedetect otomatis
   });
 
-  const deploymentUuid = activeDeploymentQuery.data?.deployment_uuid;
+  useEffect(() => {
+    const found = activeSearchQuery.data?.deployment_uuid;
+    // Cuma UPDATE kalau ketemu yang baru & beda - jangan pernah clear ke
+    // undefined cuma karena pencarian ini gak nemu (itu bukan berarti gak
+    // ada history, cuma berarti gak ada yang AKTIF sekarang).
+    if (found && found !== trackedDeploymentUuid) setTrackedDeploymentUuid(found);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSearchQuery.data]);
 
-  // Ini yang di-POLLING (endpoint spesifik, ringan) - bukan activeDeploymentQuery di atas.
   const deploymentDetailQuery = useQuery({
-    queryKey: ['deployment-detail', deploymentUuid],
-    queryFn: () => getDeploymentDetail(deploymentUuid!),
-    enabled: Boolean(deploymentUuid),
+    queryKey: ['deployment-detail', trackedDeploymentUuid],
+    queryFn: () => getDeploymentDetail(trackedDeploymentUuid!),
+    enabled: Boolean(trackedDeploymentUuid),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status && !ACTIVE_STATUSES.includes(status) ? false : 2000;
     },
   });
 
-  // Render incremental - state lokal nyimpen step yang udah "ditampilin",
-  // di-reset tiap kali pindah deploymentUuid (proyek beda / deploy baru).
   const [displayedSteps, setDisplayedSteps] = useState<DeploymentLogStep[]>([]);
   const lastIndexRef = useRef(0);
 
   useEffect(() => {
     setDisplayedSteps([]);
     lastIndexRef.current = 0;
-  }, [deploymentUuid]);
+  }, [trackedDeploymentUuid]);
 
   useEffect(() => {
     const allSteps = deploymentDetailQuery.data?.steps;
@@ -98,8 +113,33 @@ export default function CoolifyLogsScreen() {
     }
   }, [deploymentDetailQuery.data]);
 
-  const buildStatus = deploymentDetailQuery.data?.status ?? activeDeploymentQuery.data?.status;
+  const visibleSteps = showHidden ? displayedSteps : displayedSteps.filter((s) => !s.hidden);
+  const buildStatus = deploymentDetailQuery.data?.status ?? activeSearchQuery.data?.status;
   const isBuildActive = buildStatus ? ACTIVE_STATUSES.includes(buildStatus) : false;
+  const isBuildFailed = buildStatus === 'failed';
+  const isBuildSuccess = buildStatus === 'finished';
+
+  // ---- Auto-scroll cuma kalau user lagi di bawah, gak maksa kalau lagi baca history ----
+  const listRef = useRef<FlatList>(null);
+  const [isNearBottom, setIsNearBottom] = useState(true);
+
+  function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    setIsNearBottom(distanceFromBottom < NEAR_BOTTOM_THRESHOLD);
+  }
+
+  useEffect(() => {
+    if (isNearBottom && visibleSteps.length > 0) {
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleSteps.length]);
+
+  function jumpToLatest() {
+    listRef.current?.scrollToEnd({ animated: true });
+    setIsNearBottom(true);
+  }
 
   if (projectsQuery.isLoading) {
     return (
@@ -150,50 +190,86 @@ export default function CoolifyLogsScreen() {
 
       {activeTab === 'build' ? (
         <>
-          <View style={styles.statusBar}>
-            {isBuildActive && <View style={styles.pulseDot} />}
-            <Text style={styles.statusText}>
-              {activeDeploymentQuery.isLoading
-                ? 'Nyari deployment aktif...'
-                : !deploymentUuid
-                  ? 'Gak ada deploy yang lagi jalan buat project ini.'
-                  : `Status: ${buildStatus} ${isBuildActive ? '(polling tiap 2 detik)' : ''}`}
-            </Text>
+          <View style={[styles.statusBar, isBuildFailed && styles.statusBarFailed, isBuildSuccess && styles.statusBarSuccess]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 }}>
+              {isBuildActive ? (
+                <View style={styles.pulseDot} />
+              ) : isBuildFailed ? (
+                <Ionicons name="close-circle" size={16} color={colors.red} />
+              ) : isBuildSuccess ? (
+                <Ionicons name="checkmark-circle" size={16} color={colors.green} />
+              ) : null}
+              <Text
+                style={[
+                  styles.statusText,
+                  isBuildFailed && { color: colors.red },
+                  isBuildSuccess && { color: colors.green },
+                ]}
+              >
+                {activeSearchQuery.isLoading && !trackedDeploymentUuid
+                  ? 'Nyari deployment...'
+                  : !trackedDeploymentUuid
+                    ? 'Belum ada deploy yang tercatat buat project ini.'
+                    : `${buildStatus}${isBuildActive ? ' · polling tiap 2 detik' : ''}`}
+              </Text>
+            </View>
+            <Pressable onPress={() => setShowHidden((v) => !v)}>
+              <Text style={styles.toggleHiddenText}>{showHidden ? 'Sembunyikan detail' : 'Tampilkan detail'}</Text>
+            </Pressable>
           </View>
 
-          <FlatList
-            data={displayedSteps}
-            keyExtractor={(_, i) => String(i)}
-            contentContainerStyle={styles.logContent}
-            renderItem={({ item }) => (
-              <Text style={[styles.logLine, item.type === 'stderr' && styles.logLineErr]}>
-                {item.output}
-              </Text>
+          <View style={{ flex: 1 }}>
+            <FlatList
+              ref={listRef}
+              data={visibleSteps}
+              keyExtractor={(_, i) => String(i)}
+              contentContainerStyle={styles.logContent}
+              onScroll={handleScroll}
+              scrollEventThrottle={100}
+              renderItem={({ item }) => (
+                <Text selectable style={[styles.logLine, item.type === 'stderr' && styles.logLineErr]}>
+                  {item.output}
+                </Text>
+              )}
+              ListEmptyComponent={
+                !activeSearchQuery.isLoading && !trackedDeploymentUuid ? (
+                  <Card style={{ margin: spacing.lg }}>
+                    <Text style={styles.mutedText}>
+                      Trigger Start/Deploy/Restart (dari app atau dashboard Coolify) buat lihat log build-nya di sini.
+                    </Text>
+                  </Card>
+                ) : null
+              }
+            />
+            {!isNearBottom && visibleSteps.length > 0 && (
+              <Pressable style={styles.jumpBtn} onPress={jumpToLatest}>
+                <Ionicons name="arrow-down-circle" size={16} color={colors.onAccent} />
+                <Text style={styles.jumpBtnText}>Lompat ke Terbaru</Text>
+              </Pressable>
             )}
-            ListEmptyComponent={
-              !activeDeploymentQuery.isLoading && !deploymentUuid ? (
-                <Card style={{ margin: spacing.lg }}>
-                  <Text style={styles.mutedText}>
-                    Trigger Start/Deploy/Restart (dari app atau dashboard Coolify) buat lihat log build-nya di sini.
-                  </Text>
-                </Card>
-              ) : null
-            }
-          />
+          </View>
         </>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <Card style={styles.introCard}>
-            <Text style={styles.intro}>Stdout/stderr app yang lagi jalan, historis - bukan live-stream.</Text>
+            <Text style={styles.intro}>
+              Stdout/stderr app yang lagi jalan, auto-refresh tiap 2 detik selama tab ini dibuka - berhenti kalau
+              pindah tab.
+            </Text>
           </Card>
           <Card>
             <Text style={styles.projectLabel}>{selectedProject?.name ?? '-'}</Text>
-            <Button label="Ambil Log Terbaru" loading={loadRuntimeMutation.isPending} onPress={() => loadRuntimeMutation.mutate()} />
+            {runtimeQuery.isLoading && <Text style={styles.mutedText}>Memuat...</Text>}
+            {runtimeQuery.isError && (
+              <Text style={[styles.mutedText, { color: colors.red }]}>Gagal ambil log: {(runtimeQuery.error as Error)?.message}</Text>
+            )}
           </Card>
-          {runtimeLogs !== null && (
+          {runtimeQuery.data != null && (
             <Card>
               <ScrollView horizontal>
-                <Text style={styles.code}>{runtimeLogs || '(kosong)'}</Text>
+                <Text selectable style={styles.code}>
+                  {runtimeQuery.data || '(kosong)'}
+                </Text>
               </ScrollView>
             </Card>
           )}
@@ -228,10 +304,34 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   chipText: { fontSize: 12.5, fontWeight: '700', color: colors.inkMuted },
   chipTextActive: { color: colors.accent },
-  statusBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  statusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  statusBarFailed: { backgroundColor: colors.redSoft },
+  statusBarSuccess: { backgroundColor: colors.greenSoft },
   pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.amber },
   statusText: { fontSize: 12, color: colors.inkMuted, fontWeight: '600' },
+  toggleHiddenText: { fontSize: 11, fontWeight: '700', color: colors.accent },
   logContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   logLine: { fontFamily: 'monospace', fontSize: 11, color: colors.ink, lineHeight: 16 },
   logLineErr: { color: colors.red },
+  jumpBtn: {
+    position: 'absolute',
+    bottom: spacing.lg,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+  },
+  jumpBtnText: { fontSize: 12, fontWeight: '700', color: colors.onAccent },
 });

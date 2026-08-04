@@ -13,6 +13,7 @@ import {
   startCoolifyApplication,
   stopCoolifyApplication,
   restartCoolifyApplication,
+  findActiveDeploymentForApp,
 } from '@/lib/coolifyApi';
 import { getApplicationRestartCount } from '@/lib/companionApi';
 
@@ -68,6 +69,17 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
     queryFn: () => getApplicationRestartCount(applicationUuid),
     refetchInterval: settling ? 3000 : 15000,
   });
+  // Sumber kebenaran akurat "lagi deploy apa nggak" - BEDA dari "settling"
+  // (itu cuma timer buta abis klik tombol). Ini beneran cek ke Coolify.
+  // Nempel DI SAMPING status Online, BUKAN nggantiin - app bisa "Online"
+  // DAN "lagi deploy" bersamaan (zero-downtime: container lama masih
+  // ngelayanin traffic sampai yang baru siap, itu bukan bug).
+  const activeDeployQuery = useQuery({
+    queryKey: ['active-deployment', applicationUuid],
+    queryFn: () => findActiveDeploymentForApp(applicationUuid),
+    refetchInterval: 5000,
+  });
+  const isDeploying = Boolean(activeDeployQuery.data);
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['coolify-app', applicationUuid] });
@@ -135,15 +147,16 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
           <Text style={{ fontSize: 11, color: colors.red }}>
             {(appQuery.error as Error)?.message ?? 'Gagal ambil status'}
           </Text>
-        ) : settling ? (
-          <View style={styles.settlingPill}>
-            <ActivityIndicator size="small" color={colors.amber} />
-            <Text style={styles.settlingLabel}>Memproses...</Text>
-          </View>
-        ) : rawStatus ? (
-          <StatusPill status={rawStatus} />
         ) : (
-          <ActivityIndicator size="small" color={colors.inkFaint} />
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>
+            {rawStatus ? <StatusPill status={rawStatus} /> : <ActivityIndicator size="small" color={colors.inkFaint} />}
+            {(isDeploying || settling) && (
+              <View style={styles.settlingPill}>
+                <ActivityIndicator size="small" color={colors.amber} />
+                <Text style={styles.settlingLabel}>Deploy...</Text>
+              </View>
+            )}
+          </View>
         )}
       </View>
       <View style={styles.actions}>

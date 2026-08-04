@@ -174,6 +174,54 @@ export async function getDeploymentDetail(deploymentUuid: string): Promise<Deplo
   }
 }
 
+export interface CoolifyServerValidation {
+  ssh_ok?: boolean;
+  docker_ok?: boolean;
+  message?: string;
+  [key: string]: unknown;
+}
+
+/** GET /servers/{uuid}/validate - cek konektivitas SSH + Docker Engine, LANGSUNG dari Coolify API, gak butuh backend baru. */
+export async function getServerValidate(serverUuid: string): Promise<CoolifyServerValidation> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get(`/servers/${encodeURIComponent(serverUuid)}/validate`);
+    return res.data ?? {};
+  } catch (err) {
+    throw toApiError(err, 'Gagal validasi server Coolify.');
+  }
+}
+
+export interface CoolifyServerResource {
+  uuid: string;
+  name: string;
+  type?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+/** GET /servers/{uuid}/resources - semua app/db/service di server itu + status. */
+export async function getServerResources(serverUuid: string): Promise<CoolifyServerResource[]> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get(`/servers/${encodeURIComponent(serverUuid)}/resources`);
+    return Array.isArray(res.data) ? res.data : [];
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil daftar resource server Coolify.');
+  }
+}
+
+/** GET /servers/{uuid}/domains - semua domain yang ke-mapping ke server ini. */
+export async function getServerDomains(serverUuid: string): Promise<string[]> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get(`/servers/${encodeURIComponent(serverUuid)}/domains`);
+    return Array.isArray(res.data) ? res.data.map(String) : [];
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil daftar domain server Coolify.');
+  }
+}
+
 export async function getCoolifyApplicationLogs(applicationUuid: string, lines = 200): Promise<string> {
   const c = await coolifyClient();
   try {

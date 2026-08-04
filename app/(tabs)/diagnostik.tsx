@@ -17,6 +17,8 @@ import {
   scanFull,
   getDoctorPermissions,
 } from '@/lib/api';
+import { getServerValidate, getServerResources, getServerDomains, listCoolifyServers } from '@/lib/coolifyApi';
+import { isCoolifyConfigured } from '@/lib/storage';
 
 export default function DiagnostikScreen() {
   const router = useRouter();
@@ -28,13 +30,44 @@ export default function DiagnostikScreen() {
   const scan = useQuery({ queryKey: ['scan-full'], queryFn: scanFull, enabled: false, retry: false });
   const doctor = useQuery({ queryKey: ['doctor-permissions'], queryFn: getDoctorPermissions });
 
-  const refreshing = firewall.isRefetching || fail2ban.isRefetching || ssh.isRefetching || ports.isRefetching || doctor.isRefetching;
+  // Section "Coolify" - endpoint LANGSUNG dari Coolify API (validate/
+  // resources/domains), TANPA backend baru sama sekali. Terpisah dari
+  // query VPS lama di atas, cuma jalan kalau Coolify udah dikonfigurasi.
+  const coolifyConfigured = useQuery({ queryKey: ['coolify-configured'], queryFn: isCoolifyConfigured, staleTime: 5000 });
+  const coolifyServersQuery = useQuery({
+    queryKey: ['coolify-servers'],
+    queryFn: listCoolifyServers,
+    enabled: coolifyConfigured.data === true,
+  });
+  const coolifyServerUuid = coolifyServersQuery.data?.[0]?.uuid; // auto-pick kalau cuma 1, sama pola kayak fitur lain
+  const coolifyValidateQuery = useQuery({
+    queryKey: ['coolify-validate', coolifyServerUuid],
+    queryFn: () => getServerValidate(coolifyServerUuid!),
+    enabled: Boolean(coolifyServerUuid),
+  });
+  const coolifyResourcesQuery = useQuery({
+    queryKey: ['coolify-resources', coolifyServerUuid],
+    queryFn: () => getServerResources(coolifyServerUuid!),
+    enabled: Boolean(coolifyServerUuid),
+  });
+  const coolifyDomainsQuery = useQuery({
+    queryKey: ['coolify-domains', coolifyServerUuid],
+    queryFn: () => getServerDomains(coolifyServerUuid!),
+    enabled: Boolean(coolifyServerUuid),
+  });
+
+  const refreshing = firewall.isRefetching || fail2ban.isRefetching || ssh.isRefetching || ports.isRefetching || doctor.isRefetching || coolifyValidateQuery.isRefetching;
   const onRefresh = () => {
     firewall.refetch();
     fail2ban.refetch();
     ssh.refetch();
     ports.refetch();
     doctor.refetch();
+    if (coolifyServerUuid) {
+      coolifyValidateQuery.refetch();
+      coolifyResourcesQuery.refetch();
+      coolifyDomainsQuery.refetch();
+    }
   };
 
   return (
@@ -281,6 +314,52 @@ export default function DiagnostikScreen() {
                 ))}
               </Card>
             </>
+          )}
+        </>
+      )}
+
+      {coolifyConfigured.data === true && (
+        <>
+          <Text style={styles.sectionTitle}>Coolify</Text>
+          <Card>
+            <Row
+              label="Server"
+              right={
+                coolifyValidateQuery.isLoading ? (
+                  <Text style={styles.mutedText}>Mengecek...</Text>
+                ) : coolifyValidateQuery.isError ? (
+                  <Text style={styles.errorTextSmall}>Gagal cek</Text>
+                ) : (
+                  <StatusPill status={coolifyValidateQuery.data?.docker_ok && coolifyValidateQuery.data?.ssh_ok ? 'online' : 'stopped'} />
+                )
+              }
+            />
+            <View style={styles.checkRow}>
+              <CheckChip label="SSH" value={coolifyValidateQuery.data?.ssh_ok ?? null} />
+              <CheckChip label="Docker" value={coolifyValidateQuery.data?.docker_ok ?? null} />
+            </View>
+            {coolifyValidateQuery.data?.message ? (
+              <Text style={styles.subtext}>{coolifyValidateQuery.data.message}</Text>
+            ) : null}
+          </Card>
+
+          <Card>
+            <Row label="Resource di Server" right={<Text style={styles.metricValue}>{coolifyResourcesQuery.data?.length ?? '-'}</Text>} />
+            {coolifyResourcesQuery.data?.map((r, i) => (
+              <View key={r.uuid ?? i} style={[styles.metricRow, styles.rowDivider]}>
+                <Text style={styles.metricLabel} numberOfLines={1}>{r.name}</Text>
+                <Text style={styles.metricValue}>{r.status ?? r.type ?? '-'}</Text>
+              </View>
+            ))}
+          </Card>
+
+          {(coolifyDomainsQuery.data?.length ?? 0) > 0 && (
+            <Card>
+              <Text style={styles.rowLabel}>Domain Terdaftar</Text>
+              {coolifyDomainsQuery.data!.map((d, i) => (
+                <Text key={i} style={styles.subtext}>{d}</Text>
+              ))}
+            </Card>
           )}
         </>
       )}
