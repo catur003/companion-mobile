@@ -179,6 +179,66 @@ export async function getContainerDatabaseConnection(containerUuid: string, dbNa
   return unwrap(c.get(`/db/containers/${encodeURIComponent(containerUuid)}/databases/${encodeURIComponent(dbName)}/connection`));
 }
 
+export interface CompanionJob {
+  id: string;
+  type: string;
+  status: 'queued' | 'running' | 'success' | 'failed';
+  meta?: Record<string, unknown>;
+  errorTail?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** GET /jobs/:jobId - polling status import (queued -> running -> success/failed). */
+export async function getJobStatus(jobId: string): Promise<CompanionJob> {
+  const c = await companionClient();
+  return unwrap(c.get(`/jobs/${encodeURIComponent(jobId)}`));
+}
+
+/**
+ * POST .../import - upload file .sql (React Native FormData, sama pola
+ * kayak uploadSqlFile di lib/api.ts vps-manager lama). Balas jobId LANGSUNG,
+ * import-nya jalan di background - polling pake getJobStatus.
+ */
+export async function uploadDatabaseImport(
+  containerUuid: string,
+  dbName: string,
+  fileUri: string,
+  fileName: string,
+  confirmed: boolean
+): Promise<{ jobId: string }> {
+  const c = await companionClient();
+  const form = new FormData();
+  form.append('file', {
+    uri: fileUri,
+    name: fileName,
+    type: 'application/sql',
+  } as unknown as Blob);
+  form.append('confirmed', String(confirmed));
+  return unwrap(
+    c.post(`/db/containers/${encodeURIComponent(containerUuid)}/databases/${encodeURIComponent(dbName)}/import`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    })
+  );
+}
+
+/**
+ * URL + header buat download dump export - dipakai expo-file-system (bukan
+ * axios), sama pola kayak getDownloadTarget di lib/api.ts vps-manager lama.
+ */
+export async function getDatabaseExportTarget(containerUuid: string, dbName: string): Promise<{ url: string; headers: Record<string, string> }> {
+  const [baseURL, token] = await Promise.all([getCompanionBaseUrl(), getCompanionToken()]);
+  if (!baseURL || !token) {
+    throw new ApiError('Belum ada koneksi ke Companion API. Isi dulu di Settings.', 'COMPANION_NOT_CONFIGURED');
+  }
+  const base = baseURL.endsWith('/') ? baseURL.slice(0, -1) : baseURL;
+  return {
+    url: `${base}/db/containers/${encodeURIComponent(containerUuid)}/databases/${encodeURIComponent(dbName)}/export`,
+    headers: { Authorization: `Bearer ${token}` },
+  };
+}
+
 /** GET /db/schemas - daftar nama schema/database di 1 server MySQL, buat cegah tabrakan nama & resolve project yang numpang. */
 export async function listDatabaseSchemas(databaseUuid: string): Promise<string[]> {
   const c = await companionClient();

@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
@@ -14,6 +17,9 @@ import {
   deleteContainerDatabase,
   createDatabaseSchema,
   getContainerDatabaseConnection,
+  uploadDatabaseImport,
+  getJobStatus,
+  getDatabaseExportTarget,
   ContainerDatabaseEntry,
 } from '@/lib/companionApi';
 
@@ -23,12 +29,11 @@ import {
  * 1 server MySQL) isinya banyak Database (A, B, C dst), masing-masing
  * kepisah total, bisa ditambah/dihapus dari sini.
  *
- * UBAH LAGI (4 Agustus 2026, feedback): dulu screen ini CUMA nampilin nama
- * database, gak nyambung ke mana-mana - user gak bisa liat isi tabelnya, gak
- * bisa liat username/password lagi setelah bikin. Sekarang tiap baris punya
- * 2 aksi: "Lihat Tabel" (browse LANGSUNG, gak perlu daftarin ke "Kelola
- * Mapping Project" dulu) dan "Info Koneksi" (username/password/DATABASE_URL
- * lengkap, bisa dibuka ulang kapan aja + copy clipboard).
+ * UBAH LAGI (4 Agustus 2026, feedback): tiap baris punya 4 aksi sekarang -
+ * "Lihat Tabel" (browse langsung), "Info Koneksi" (username/password/
+ * DATABASE_URL, bisa dibuka ulang kapan aja), "Import" (upload .sql - job
+ * background + polling status, BUKAN nunggu di layar sampai selesai), dan
+ * "Export" (download dump .sql langsung).
  */
 export default function CoolifyContainerDbScreen() {
   const router = useRouter();
@@ -53,6 +58,10 @@ export default function CoolifyContainerDbScreen() {
   const [newUser, setNewUser] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [infoLoadingFor, setInfoLoadingFor] = useState<string | null>(null);
+  const [exportingFor, setExportingFor] = useState<string | null>(null);
+  // dbName -> jobId lagi jalan (buat polling status import). null/gak ada =
+  // gak lagi ada import jalan buat database itu.
+  const [importJobByDb, setImportJobByDb] = useState<Record<string, string | undefined>>({});
 
   function invalidateList() {
     qc.invalidateQueries({ queryKey: ['container-databases', activeContainerUuid] });
@@ -73,6 +82,54 @@ export default function CoolifyContainerDbScreen() {
     } finally {
       setInfoLoadingFor(null);
     }
+  }
+
+  async function handleExport(dbName: string) {
+    if (!activeContainerUuid) return;
+    setExportingFor(dbName);
+    try {
+      const { url, headers } = await getDatabaseExportTarget(activeContainerUuid, dbName);
+      const dest = `${FileSystem.cacheDirectory}${dbName}-${Date.now()}.sql`;
+      const result = await FileSystem.downloadAsync(url, dest, { headers });
+      if (result.status !== 200) throw new Error(`Server membalas status ${result.status}.`);
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(result.uri, { dialogTitle: `${dbName}.sql` });
+      } else {
+        Alert.alert('Terunduh', `File tersimpan sementara di:\n${result.uri}`);
+      }
+    } catch (err) {
+      Alert.alert('Gagal Export', err instanceof ApiError ? err.message : (err as Error)?.message || 'Terjadi kesalahan.');
+    } finally {
+      setExportingFor(null);
+    }
+  }
+
+  async function handleImport(dbName: string) {
+    if (!activeContainerUuid) return;
+    const picked = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+    if (picked.canceled || !picked.assets?.[0]) return;
+    const asset = picked.assets[0];
+
+    Alert.alert(
+      `Import ke "${dbName}"?`,
+      `File: ${asset.name}\n\nISI FILE DIJALANIN APA ADANYA (bisa CREATE TABLE, INSERT, DROP, dll) - gak divalidasi/dibatasi kayak fitur SQL Query lain. Kalau ada data lama yang bentrok (mis. primary key sama), import bisa GAGAL DI TENGAH atau NIMPA data. Lanjut?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Import',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { jobId } = await uploadDatabaseImport(activeContainerUuid, dbName, asset.uri, asset.name, true);
+              setImportJobByDb((prev) => ({ ...prev, [dbName]: jobId }));
+            } catch (err) {
+              Alert.alert('Gagal Mulai Import', err instanceof ApiError ? err.message : 'Terjadi kesalahan.');
+            }
+          },
+        },
+      ]
+    );
   }
 
   const addMutation = useMutation({
@@ -158,9 +215,8 @@ export default function CoolifyContainerDbScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Card style={styles.introCard}>
         <Text style={styles.intro}>
-          1 Container Database = 1 server MySQL, bisa isi banyak Database terpisah (A, B, C) - hemat resource VPS,
-          gak perlu bikin container baru tiap project. Tap "Lihat Tabel" buat browse isinya, "Info Koneksi" buat
-          liat/copy DATABASE_URL kapan aja.
+          1 Container Database = 1 server MySQL, bisa isi banyak Database terpisah (A, B, C) - hemat resource VPS.
+          "Lihat Tabel" buat browse, "Info Koneksi" buat DATABASE_URL, "Import"/"Export" buat pindahin data (.sql).
         </Text>
       </Card>
 
@@ -196,6 +252,11 @@ export default function CoolifyContainerDbScreen() {
           }
           onInfo={() => showConnectionInfo(db.name)}
           infoLoading={infoLoadingFor === db.name}
+          onExport={() => handleExport(db.name)}
+          exporting={exportingFor === db.name}
+          onImport={() => handleImport(db.name)}
+          activeJobId={importJobByDb[db.name]}
+          onJobSettled={() => setImportJobByDb((prev) => ({ ...prev, [db.name]: undefined }))}
           onDelete={() => deleteMutation.mutate({ name: db.name, confirmed: false })}
           deleting={deleteMutation.isPending}
         />
@@ -223,11 +284,58 @@ export default function CoolifyContainerDbScreen() {
   );
 }
 
+/** Poll status job import tiap 2 detik selama masih queued/running. */
+function ImportJobStatus({ jobId, onSettled }: { jobId: string; onSettled: () => void }) {
+  const { data } = useQuery({
+    queryKey: ['job-status', jobId],
+    queryFn: () => getJobStatus(jobId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'success' || status === 'failed' ? false : 2000;
+    },
+  });
+
+  if (!data) return null;
+
+  if (data.status === 'success' && !data.errorTail) {
+    // Sengaja gak auto-hilang - biar user liat "Berhasil" dulu, baru hilang
+    // pas dia ninggalin layar/refresh manual (state lokal di parent).
+  }
+
+  return (
+    <View style={styles.jobStatusRow}>
+      {(data.status === 'queued' || data.status === 'running') && <ActivityIndicator size="small" color={colors.amber} />}
+      <Text
+        style={[
+          styles.jobStatusText,
+          data.status === 'success' && { color: colors.green },
+          data.status === 'failed' && { color: colors.red },
+        ]}
+      >
+        Import: {data.status === 'queued' ? 'menunggu...' : data.status === 'running' ? 'lagi jalan...' : data.status === 'success' ? 'berhasil ✓' : 'gagal ✕'}
+      </Text>
+      {data.status === 'failed' && data.errorTail && (
+        <Text style={styles.jobErrorText} numberOfLines={4}>
+          {data.errorTail}
+        </Text>
+      )}
+      {(data.status === 'success' || data.status === 'failed') && (
+        <Button label="Tutup" variant="secondary" onPress={onSettled} />
+      )}
+    </View>
+  );
+}
+
 function DatabaseRow({
   db,
   onBrowse,
   onInfo,
   infoLoading,
+  onExport,
+  exporting,
+  onImport,
+  activeJobId,
+  onJobSettled,
   onDelete,
   deleting,
 }: {
@@ -235,6 +343,11 @@ function DatabaseRow({
   onBrowse: () => void;
   onInfo: () => void;
   infoLoading: boolean;
+  onExport: () => void;
+  exporting: boolean;
+  onImport: () => void;
+  activeJobId?: string;
+  onJobSettled: () => void;
   onDelete: () => void;
   deleting: boolean;
 }) {
@@ -251,12 +364,21 @@ function DatabaseRow({
         <View style={{ flex: 1 }}>
           <Button label="Info Koneksi" variant="secondary" loading={infoLoading} onPress={onInfo} />
         </View>
+      </View>
+      <View style={styles.dbActionsRow}>
+        <View style={{ flex: 1 }}>
+          <Button label="Import" variant="secondary" disabled={Boolean(activeJobId)} onPress={onImport} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button label="Export" variant="secondary" loading={exporting} onPress={onExport} />
+        </View>
         {!db.isDefault && (
           <View style={{ flex: 1 }}>
             <Button label="Hapus" variant="danger" loading={deleting} onPress={onDelete} />
           </View>
         )}
       </View>
+      {activeJobId && <ImportJobStatus jobId={activeJobId} onSettled={onJobSettled} />}
     </Card>
   );
 }
@@ -275,4 +397,7 @@ const styles = StyleSheet.create({
   dbName: { fontSize: 14, fontWeight: '700', color: colors.ink, fontFamily: 'monospace' },
   dbMeta: { fontSize: 11, color: colors.inkFaint },
   dbActionsRow: { flexDirection: 'row', gap: spacing.sm },
+  jobStatusRow: { gap: 4, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: colors.divider, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  jobStatusText: { fontSize: 12, fontWeight: '700', color: colors.inkMuted },
+  jobErrorText: { fontSize: 11, color: colors.red, fontFamily: 'monospace', width: '100%' },
 });
