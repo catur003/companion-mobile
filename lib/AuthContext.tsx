@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
-import { isConfigured } from './storage';
+import { isConfigured, clearCredentials, getBaseUrl } from './storage';
 
 interface AuthContextValue {
   /** Lagi ngecek SecureStore pertama kali app dibuka (splash/loading). */
@@ -41,6 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Cleanup sekali pas app boot (5 Agustus 2026, bug nyata): backend
+    // vps-manager mati total & UI Settings buat lihat/edit kredensialnya
+    // udah dibuang, TAPI kredensial LAMA yang udah kesimpen di SecureStore
+    // sebelumnya TIDAK PERNAH dihapus - efeknya, kode yang KELEWAT masih
+    // manggil listDatabases() vps-manager (tab Database) TETAP BISA
+    // CONNECT pakai kredensial basi itu, nampilin database VPS LAMA yang
+    // gak relevan lagi. Idempotent (no-op kalau udah kosong) - aman
+    // dipanggil tiap boot, gak perlu flag "udah pernah jalan".
+    getBaseUrl().then((url) => {
+      if (url) clearCredentials();
+    });
     refresh().finally(() => setChecking(false));
   }, [refresh]);
 

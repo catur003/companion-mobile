@@ -9,7 +9,7 @@ import { AuroraBackground } from '@/components/AuroraBackground';
 import { colors, spacing, radius } from '@/lib/theme';
 import { useTabTopPadding } from '@/lib/useTopInset';
 import { pushIntoTab } from '@/lib/nav';
-import { getSystemSshConfig, getSystemOpenPorts } from '@/lib/companionApi';
+import { getSystemSshConfig } from '@/lib/companionApi';
 import { triggerServerValidate, getServerResources, getServerDomains, listCoolifyServers } from '@/lib/coolifyApi';
 import { isCompanionConfigured, isCoolifyConfigured } from '@/lib/storage';
 
@@ -35,11 +35,6 @@ export default function DiagnostikScreen() {
   const sshConfig = useQuery({
     queryKey: ['system-ssh-config'],
     queryFn: getSystemSshConfig,
-    enabled: companionConfigured.data === true,
-  });
-  const openPorts = useQuery({
-    queryKey: ['system-open-ports'],
-    queryFn: getSystemOpenPorts,
     enabled: companionConfigured.data === true,
   });
 
@@ -71,11 +66,10 @@ export default function DiagnostikScreen() {
     enabled: Boolean(coolifyServerUuid),
   });
 
-  const refreshing = sshConfig.isRefetching || openPorts.isRefetching || coolifyResourcesQuery.isRefetching;
+  const refreshing = sshConfig.isRefetching || coolifyResourcesQuery.isRefetching;
   const onRefresh = () => {
     if (companionConfigured.data === true) {
       sshConfig.refetch();
-      openPorts.refetch();
     }
     if (coolifyServerUuid) {
       coolifyResourcesQuery.refetch();
@@ -137,19 +131,6 @@ export default function DiagnostikScreen() {
             )}
           </Card>
 
-          <Card>
-            <Text style={styles.rowLabel}>Port Terbuka {openPorts.data ? `(${openPorts.data.ports.length})` : ''}</Text>
-            {openPorts.isLoading && <Text style={styles.mutedText}>Mengecek...</Text>}
-            {openPorts.isError && (
-              <Text style={styles.errorTextSmall}>Gagal ambil daftar port: {(openPorts.error as Error)?.message ?? 'unknown error'}</Text>
-            )}
-            {openPorts.data?.ports.map((p, i) => (
-              <View key={`${p.port}-${i}`} style={[styles.metricRow, i > 0 && styles.rowDivider]}>
-                <Text style={styles.metricLabel}>:{p.port}</Text>
-                <Text style={styles.metricValue} numberOfLines={1}>{p.process}</Text>
-              </View>
-            ))}
-          </Card>
         </>
       )}
 

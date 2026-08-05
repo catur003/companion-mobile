@@ -1,23 +1,26 @@
-import { View, Text, StyleSheet, FlatList, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
-import { Button } from '@/components/Button';
 import { Fab } from '@/components/Fab';
 import { AuroraBackground } from '@/components/AuroraBackground';
 import { colors, spacing } from '@/lib/theme';
 import { useTabTopPadding } from '@/lib/useTopInset';
-import { listDatabases, testDatabaseConnection, ApiError } from '@/lib/api';
 import { isCompanionConfigured, isCoolifyConfigured } from '@/lib/storage';
 
+/**
+ * REDESIGN (5 Agustus 2026) - KETAHUAN masih manggil listDatabases()/
+ * testDatabaseConnection() vps-manager (KELEWAT pas cleanup Fase D/E - itu
+ * yang bikin "database VPS lain masih kebaca", kredensial lama emang masih
+ * nyangkut di SecureStore, gak pernah dihapus walau UI-nya udah dibuang).
+ * Sekarang dirombak total, cuma sisa link Coolify/Companion. FAB "+"
+ * sekarang langsung ke Buat Database Coolify (satu-satunya jalur create
+ * yang masih fungsional - dulu ke /database/create, itu file udah dihapus).
+ */
 export default function DatabaseListScreen() {
   const router = useRouter();
   const topPadding = useTabTopPadding();
-  const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
-    queryKey: ['databases'],
-    queryFn: listDatabases,
-  });
 
   const companionConfigured = useQuery({
     queryKey: ['companion-configured'],
@@ -29,118 +32,83 @@ export default function DatabaseListScreen() {
     queryFn: isCoolifyConfigured,
     staleTime: 5000,
   });
-
-  const testMutation = useMutation({
-    mutationFn: testDatabaseConnection,
-    onSuccess: () => Alert.alert('Berhasil', 'Koneksi ke MySQL (kredensial root dari Configuration) berhasil.'),
-    onError: (err) => Alert.alert('Gagal', err instanceof ApiError ? err.message : 'Terjadi kesalahan.'),
-  });
-
-  const databases = data?.databases ?? [];
+  const refreshing = companionConfigured.isRefetching || coolifyConfigured.isRefetching;
+  const onRefresh = () => {
+    companionConfigured.refetch();
+    coolifyConfigured.refetch();
+  };
 
   return (
     <View style={styles.wrap}>
       <AuroraBackground />
-      <FlatList
+      <ScrollView
         style={styles.screen}
-        data={databases}
-        keyExtractor={(item) => item}
         contentContainerStyle={[styles.content, { paddingTop: topPadding }]}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.accent} />}
-        ListHeaderComponent={
-          <>
-            <Card>
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>Koneksi MySQL</Text>
-                  <Text style={styles.meta}>Tes kredensial root dari Configuration</Text>
-                </View>
-                <Button label="Test Koneksi" variant="secondary" loading={testMutation.isPending} onPress={() => testMutation.mutate()} />
-              </View>
-            </Card>
-            {coolifyConfigured.data === true && (
-              <Card onPress={() => router.push('/(tabs)/database/coolify-container-db')} style={styles.coolifyLink}>
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>Kelola Container Database (Beta)</Text>
-                    <Text style={styles.meta}>Tambah/hapus database di server yang udah ada</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
-                </View>
-              </Card>
-            )}
-            {companionConfigured.data === true && (
-              <Card onPress={() => router.push('/(tabs)/database/coolify-browse')} style={styles.coolifyLink}>
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>Browse Database Coolify (Beta)</Text>
-                    <Text style={styles.meta}>List tabel & preview - gak perlu ngetik SQL</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
-                </View>
-              </Card>
-            )}
-            {companionConfigured.data === true && (
-              <Card onPress={() => router.push('/(tabs)/database/coolify-query')} style={styles.coolifyLink}>
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>Coolify SQL Query (Beta)</Text>
-                    <Text style={styles.meta}>SELECT-only, raw hasil</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
-                </View>
-              </Card>
-            )}
-            {coolifyConfigured.data === true && (
-              <Card onPress={() => router.push('/(tabs)/database/coolify-new-database')} style={styles.coolifyLink}>
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>Buat Database Coolify (Beta)</Text>
-                    <Text style={styles.meta}>MySQL - langsung ke Coolify, terpisah dari VPS lama</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
-                </View>
-              </Card>
-            )}
-            <Text style={styles.sectionTitle}>{isLoading ? 'Memuat...' : `${databases.length} Database`}</Text>
-          </>
-        }
-        ListEmptyComponent={
-          !isLoading ? (
-            <Card>
-              <Text style={styles.emptyText}>
-                {isError ? `Gagal ambil daftar database: ${(error as Error)?.message}` : 'Belum ada database.'}
-              </Text>
-            </Card>
-          ) : null
-        }
-        renderItem={({ item }) => (
-          <Card onPress={() => router.push(`/(tabs)/database/${encodeURIComponent(item)}`)}>
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+      >
+        <Text style={styles.eyebrow}>ZENHUB VPS</Text>
+        <Text style={styles.title}>Database</Text>
+
+        {coolifyConfigured.data === true && (
+          <Card onPress={() => router.push('/(tabs)/database/coolify-container-db')} style={styles.coolifyLink}>
             <View style={styles.row}>
-              <View>
-                <Text style={styles.name}>{item}</Text>
-                <Text style={styles.meta}>Ketuk untuk lihat tabel & kelola</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>Kelola Container Database</Text>
+                <Text style={styles.meta}>Tambah/hapus database di server yang udah ada</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
             </View>
           </Card>
         )}
-      />
-      <View style={styles.fabWrap}>
-        <Fab onPress={() => router.push('/(tabs)/database/create')}>
-          <Ionicons name="add" size={26} color={colors.onAccent} />
-        </Fab>
-      </View>
+        {companionConfigured.data === true && (
+          <Card onPress={() => router.push('/(tabs)/database/coolify-browse')} style={styles.coolifyLink}>
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>Browse Database</Text>
+                <Text style={styles.meta}>List tabel & preview - gak perlu ngetik SQL</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+            </View>
+          </Card>
+        )}
+        {companionConfigured.data === true && (
+          <Card onPress={() => router.push('/(tabs)/database/coolify-query')} style={styles.coolifyLink}>
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>SQL Query</Text>
+                <Text style={styles.meta}>SELECT-only, raw hasil</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
+            </View>
+          </Card>
+        )}
+
+        {companionConfigured.data !== true && coolifyConfigured.data !== true && (
+          <Card>
+            <Text style={styles.emptyText}>
+              Belum ada koneksi Companion API/Coolify - isi dulu di Setelan biar fitur database muncul di sini.
+            </Text>
+          </Card>
+        )}
+      </ScrollView>
+
+      {coolifyConfigured.data === true && (
+        <View style={styles.fabWrap}>
+          <Fab onPress={() => router.push('/(tabs)/database/coolify-new-database')}>
+            <Ionicons name="add" size={26} color={colors.onAccent} />
+          </Fab>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // transparent - AuroraBackground dipasang sekali di (tabs)/_layout.tsx.
   wrap: { flex: 1 },
   screen: { flex: 1, backgroundColor: 'transparent' },
-  content: { padding: spacing.lg, paddingBottom: 100 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.inkFaint, marginBottom: spacing.sm, textTransform: 'uppercase', letterSpacing: 0.6 },
+  content: { padding: spacing.lg, paddingBottom: 100, gap: spacing.sm },
+  eyebrow: { fontSize: 11, fontWeight: '700', color: colors.inkFaint, letterSpacing: 1 },
+  title: { fontSize: 24, fontWeight: '800', color: colors.ink, marginBottom: spacing.sm },
   emptyText: { fontSize: 13, color: colors.inkMuted },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   name: { fontSize: 15, fontWeight: '700', color: colors.ink },
