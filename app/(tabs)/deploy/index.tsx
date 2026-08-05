@@ -142,6 +142,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   type: { fontSize: 10.5, fontWeight: '700', color: colors.accent, textTransform: 'uppercase', letterSpacing: 0.4 },
   name: { fontSize: 14.5, fontWeight: '700', color: colors.ink, marginTop: 2 },
-  coolifyLink: { borderColor: colors.greenSoft, backgroundColor: colors.greenSoft },
+  coolifyLink: { backgroundColor: colors.card, borderLeftWidth: 3, borderLeftColor: colors.green },
   fabRow: { position: 'absolute', right: spacing.lg, bottom: spacing.lg },
 });

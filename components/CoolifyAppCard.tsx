@@ -158,7 +158,15 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
         ) : (
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
             {rawStatus ? <StatusPill status={rawStatus} /> : <ActivityIndicator size="small" color={colors.inkFaint} />}
-            {(isDeploying || settling) && (
+            {/* FIX (5 Agustus 2026, bug nyata: badge nyangkut lama walau
+                proses aslinya udah kelar) - SEBELUMNYA "settling" (timer
+                buta SETTLE_MS) ikut nentuin badge, jadi walau isDeploying
+                (deteksi ASLI) udah balik false duluan, badge tetep maksa
+                nongol sampe timer abis. Sekarang badge CUMA ngikutin
+                isDeploying + pending (lagi manggil API-nya doang, itungan
+                detik) - "settling" cuma dipake buat percepat polling
+                (refetchInterval di atas), gak lagi nentuin tampilan badge. */}
+            {(isDeploying || pending !== null) && (
               <View style={styles.settlingPill}>
                 <ActivityIndicator size="small" color={colors.amber} />
                 <Text style={styles.settlingLabel}>Deploy...</Text>

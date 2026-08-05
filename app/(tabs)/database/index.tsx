@@ -114,5 +114,5 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '700', color: colors.ink },
   meta: { fontSize: 11.5, color: colors.inkFaint, marginTop: 2 },
   fabWrap: { position: 'absolute', right: spacing.lg, bottom: spacing.lg },
-  coolifyLink: { borderColor: colors.blueSoft, backgroundColor: colors.blueSoft },
+  coolifyLink: { backgroundColor: colors.card, borderLeftWidth: 3, borderLeftColor: colors.blue },
 });
