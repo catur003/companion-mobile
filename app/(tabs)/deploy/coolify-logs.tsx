@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, Pressable, FlatList, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -62,12 +62,22 @@ export default function CoolifyLogsScreen() {
     refetchInterval: 2000,
   });
 
-  // ---- Build log - sticky tracking, gak di-clear cuma karena status finished ----
-  const [trackedDeploymentUuid, setTrackedDeploymentUuid] = useState<string | undefined>();
-
-  useEffect(() => {
-    setTrackedDeploymentUuid(undefined); // ganti project = reset total, itu wajar
-  }, [selectedProject?.applicationUuid]);
+  // ---- Build log - sticky tracking ----
+  // FIX (5 Agustus 2026, bug nyata: log ilang cuma tutup-buka layar, BUKAN
+  // reload app): sebelumnya disimpen di useState LOKAL LAYAR INI - layar
+  // Log itu modal, ditutup = di-unmount = state ke-hapus total, buka lagi =
+  // komponen baru dari nol. Sekarang disimpen di cache QueryClient (level
+  // app, dibikin sekali di root, HIDUP selama app-nya gak di-reload/kill) -
+  // tutup-buka layar TIDAK ngilangin ini lagi, cuma reload app beneran yang
+  // bakal reset (itu wajar, gak ada state React yang tahan reload).
+  const qc = useQueryClient();
+  const trackedQuery = useQuery<string | undefined>({
+    queryKey: ['last-known-deployment', selectedProject?.applicationUuid],
+    queryFn: () => undefined, // slot cache doang, gak pernah auto-fetch - cuma diisi manual via setQueryData
+    enabled: false,
+    staleTime: Infinity,
+  });
+  const trackedDeploymentUuid = trackedQuery.data;
 
   const activeSearchQuery = useQuery({
     queryKey: ['active-deployment', selectedProject?.applicationUuid],
@@ -81,7 +91,9 @@ export default function CoolifyLogsScreen() {
     // Cuma UPDATE kalau ketemu yang baru & beda - jangan pernah clear ke
     // undefined cuma karena pencarian ini gak nemu (itu bukan berarti gak
     // ada history, cuma berarti gak ada yang AKTIF sekarang).
-    if (found && found !== trackedDeploymentUuid) setTrackedDeploymentUuid(found);
+    if (found && found !== trackedDeploymentUuid && selectedProject) {
+      qc.setQueryData(['last-known-deployment', selectedProject.applicationUuid], found);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSearchQuery.data]);
 
