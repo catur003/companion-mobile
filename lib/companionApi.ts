@@ -369,6 +369,78 @@ export async function resetDatabasePassword(
 export type CompanionProjectType = 'nextjs-prisma' | 'laravel';
 export type CompanionMigrateMode = 'generate' | 'push' | 'push_force' | 'migrate' | 'seed' | 'migrate_force';
 
+// ===================== Diagnostik: Docker ps/stats/inspect =====================
+// BARU (5 Agustus 2026) - read-only murni (Bagian 8), BELUM DITES end-to-end
+// ke instance nyata (beda dari fungsi lain di file ini yang udah dikonfirmasi
+// 4 Agustus 2026) - verifikasi dulu manual sebelum dianggap final.
+
+export interface DiagnosticContainerPort {
+  private: number | null;
+  public: number | null;
+  type: string | null;
+}
+
+export interface DiagnosticContainerSummary {
+  id: string;
+  fullId: string;
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+  createdAt: string;
+  ports: DiagnosticContainerPort[];
+}
+
+/** GET /diagnostics/containers - docker ps, SEMUA container termasuk infra Coolify sendiri. */
+export async function listDiagnosticContainers(): Promise<DiagnosticContainerSummary[]> {
+  const c = await companionClient();
+  const result = await unwrap<{ containers: DiagnosticContainerSummary[] }>(c.get('/diagnostics/containers'));
+  return result.containers;
+}
+
+export interface DiagnosticEnvEntry {
+  key: string;
+  value: string;
+  masked: boolean;
+}
+
+export interface DiagnosticContainerResources {
+  cpuPercent: number;
+  memUsageMB: number;
+  memLimitMB: number;
+  memPercent: number;
+  netRxMB: number;
+  netTxMB: number;
+  blockReadMB: number;
+  blockWriteMB: number;
+  pids: number | null;
+}
+
+export interface DiagnosticContainerDetail {
+  id: string;
+  fullId: string;
+  name: string;
+  image: string | null;
+  state: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  restartCount: number | null;
+  restartPolicy: string;
+  createdAt: string | null;
+  networks: string[];
+  ports: { containerPort: string; hostBindings: string[] }[];
+  mounts: { type: string; source: string; destination: string; readOnly: boolean }[];
+  env: DiagnosticEnvEntry[];
+  resources: DiagnosticContainerResources | null;
+  resourcesError?: string;
+}
+
+/** GET /diagnostics/containers/:id - inspect + stats digabung. Env var sensitif udah di-mask server-side. */
+export async function getDiagnosticContainerDetail(id: string): Promise<DiagnosticContainerDetail> {
+  const c = await companionClient();
+  return unwrap(c.get(`/diagnostics/containers/${encodeURIComponent(id)}`));
+}
+
 /**
  * POST /db/migrate - generate command + kirim ke field Post-deployment Coolify
  * lewat PATCH /api/v1/applications/{uuid}. Mode "push_force"/"seed" butuh

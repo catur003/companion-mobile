@@ -252,6 +252,26 @@ export async function getServerDomains(serverUuid: string): Promise<string[]> {
   }
 }
 
+/**
+ * BARU (5 Agustus 2026) - ambil IP server LANGSUNG dari API (bukan hardcode
+ * di app), buat auto-suffix template sslip.io di form Domain & SSL. Pakai
+ * endpoint yang SAMA kayak getServerDomains di atas (/servers/{uuid}/domains,
+ * shape {ip, domains}[] udah confirmed), cuma ambil field "ip"-nya, bukan
+ * "domains". Kalau ada >1 entry IP (server multi-NIC, jarang), ambil yang
+ * pertama - belum ada kasus nyata buat mikirin yang kedua.
+ */
+export async function getServerIp(serverUuid: string): Promise<string | null> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get(`/servers/${encodeURIComponent(serverUuid)}/domains`);
+    const raw = Array.isArray(res.data) ? res.data : [];
+    const first = raw.find((entry) => entry && typeof entry === 'object' && (entry as { ip?: unknown }).ip);
+    return first ? String((first as { ip: string }).ip) : null;
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil IP server Coolify.');
+  }
+}
+
 export async function getCoolifyApplicationLogs(applicationUuid: string, lines = 200): Promise<string> {
   const c = await coolifyClient();
   try {
