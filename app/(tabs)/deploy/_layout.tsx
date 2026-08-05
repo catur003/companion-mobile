@@ -35,14 +35,6 @@ export default function DeployStackLayout() {
           headerTintColor: colors.termText,
         }}
       />
-      <Stack.Screen
-        name="terminal"
-        options={{
-          title: 'Terminal Cepat (Exec) - Bug, belum diperbaiki',
-          headerStyle: { backgroundColor: colors.termBg },
-          headerTintColor: colors.termText,
-        }}
-      />
     </Stack>
   );
 }

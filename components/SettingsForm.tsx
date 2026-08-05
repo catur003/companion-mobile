@@ -292,11 +292,6 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
             <Button label="Simpan" loading={companionSaving} onPress={handleCompanionSave} />
           </View>
         </View>
-        {Boolean(companionUrl || companionToken) && (
-          <Pressable onPress={handleCompanionReset} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
-            <Text style={{ fontSize: 12, color: colors.red, fontWeight: '600' }}>Hapus koneksi Companion API</Text>
-          </Pressable>
-        )}
       </Card>
 
       <Text style={styles.sectionTitle}>Coolify API Langsung (Beta)</Text>
@@ -337,11 +332,6 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
             <Button label="Simpan" loading={coolifySaving} onPress={handleCoolifySave} />
           </View>
         </View>
-        {Boolean(coolifyUrl || coolifyToken) && (
-          <Pressable onPress={handleCoolifyReset} style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}>
-            <Text style={{ fontSize: 12, color: colors.red, fontWeight: '600' }}>Hapus koneksi Coolify API</Text>
-          </Pressable>
-        )}
       </Card>
 
       <Text style={styles.sectionTitle}>Tentang</Text>
@@ -359,11 +349,20 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
       <Text style={[styles.sectionTitle, { color: colors.red }]}>Zona Berbahaya</Text>
       <Card style={styles.dangerCard} onPress={handleCompanionReset}>
         <View style={[styles.rowIconWrap, { backgroundColor: colors.redSoft }]}>
-          <Ionicons name="log-out-outline" size={18} color={colors.red} />
+          <Ionicons name="git-branch-outline" size={18} color={colors.red} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.rowTitle, { color: colors.red }]}>Hapus Koneksi Tersimpan</Text>
-          <Text style={styles.rowSub}>Companion API - URL & token akan dihapus dari HP ini</Text>
+          <Text style={[styles.rowTitle, { color: colors.red }]}>Hapus Koneksi Companion API</Text>
+          <Text style={styles.rowSub}>URL & token Companion API doang - Coolify API gak kesentuh. App balik ke layar setup.</Text>
+        </View>
+      </Card>
+      <Card style={styles.dangerCard} onPress={handleCoolifyReset}>
+        <View style={[styles.rowIconWrap, { backgroundColor: colors.redSoft }]}>
+          <Ionicons name="cube-outline" size={18} color={colors.red} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.rowTitle, { color: colors.red }]}>Hapus Koneksi Coolify API</Text>
+          <Text style={styles.rowSub}>URL & token Coolify API doang - Companion API gak kesentuh.</Text>
         </View>
       </Card>
 

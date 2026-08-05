@@ -1,16 +1,15 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
+import { StatusPill } from '@/components/StatusPill';
 import { AuroraBackground } from '@/components/AuroraBackground';
 import { colors, spacing, radius } from '@/lib/theme';
 import { useTabTopPadding } from '@/lib/useTopInset';
 import { pushIntoTab } from '@/lib/nav';
 import { getSystemSshConfig } from '@/lib/companionApi';
-import { triggerServerValidate, getServerResources, getServerDomains, listCoolifyServers } from '@/lib/coolifyApi';
+import { getServerResources, getServerDomains, listCoolifyServers } from '@/lib/coolifyApi';
 import { isCompanionConfigured, isCoolifyConfigured } from '@/lib/storage';
 
 /**
@@ -38,8 +37,8 @@ export default function DiagnostikScreen() {
     enabled: companionConfigured.data === true,
   });
 
-  // Section "Coolify" - endpoint LANGSUNG dari Coolify API (validate/
-  // resources/domains), TANPA backend baru sama sekali.
+  // Section "Coolify" - endpoint LANGSUNG dari Coolify API (resources/
+  // domains), TANPA backend baru sama sekali.
   const coolifyConfigured = useQuery({ queryKey: ['coolify-configured'], queryFn: isCoolifyConfigured, staleTime: 5000 });
   const coolifyServersQuery = useQuery({
     queryKey: ['coolify-servers'],
@@ -47,14 +46,6 @@ export default function DiagnostikScreen() {
     enabled: coolifyConfigured.data === true,
   });
   const coolifyServerUuid = coolifyServersQuery.data?.[0]?.uuid; // auto-pick kalau cuma 1, sama pola kayak fitur lain
-  // /validate itu ASYNC (confirmed via curl), cuma balikin
-  // {"message":"Validation started."} - GAK ADA hasil ssh_ok/docker_ok
-  // instan. Trigger + kasih tau cek hasilnya di dashboard Coolify.
-  const [validateTriggered, setValidateTriggered] = useState(false);
-  const validateMutation = useMutation({
-    mutationFn: () => triggerServerValidate(coolifyServerUuid!),
-    onSuccess: () => setValidateTriggered(true),
-  });
   const coolifyResourcesQuery = useQuery({
     queryKey: ['coolify-resources', coolifyServerUuid],
     queryFn: () => getServerResources(coolifyServerUuid!),
@@ -97,12 +88,6 @@ export default function DiagnostikScreen() {
         variant="secondary"
         onPress={() => pushIntoTab(router, '/(tabs)/deploy', '/(tabs)/deploy/ssh-terminal')}
       />
-      <Pressable
-        style={styles.fallbackLink}
-        onPress={() => pushIntoTab(router, '/(tabs)/deploy', '/(tabs)/deploy/terminal')}
-      >
-        <Text style={styles.fallbackLinkText}>Atau pakai Terminal Cepat (Exec) - gak butuh setup SSH</Text>
-      </Pressable>
 
       {companionConfigured.data === true && (
         <>
@@ -142,26 +127,14 @@ export default function DiagnostikScreen() {
         <>
           <Text style={styles.sectionTitle}>Coolify</Text>
           <Card>
-            <Row label="Server" right={<Text style={styles.mutedText}>Cek async</Text>} />
-            <Text style={styles.subtext}>
-              Coolify gak kasih hasil instan buat cek SSH/Docker sehat lewat API (dikonfirmasi: endpoint-nya cuma
-              nge-trigger job background, gak ada status yang bisa dibaca balik). Tombol di bawah cuma
-              MEMICU validasi - hasilnya cek manual di dashboard Coolify (Settings → Servers).
-            </Text>
-            <Button
-              label={validateTriggered ? 'Validasi Dipicu (cek di Coolify)' : 'Trigger Validasi Server'}
-              variant="secondary"
-              loading={validateMutation.isPending}
-              onPress={() => validateMutation.mutate()}
+            <Row
+              label="Resource di Server"
+              right={<Text style={styles.metricValue}>{coolifyResourcesQuery.data?.length ?? '-'} resource</Text>}
             />
-          </Card>
-
-          <Card>
-            <Row label="Resource di Server" right={<Text style={styles.metricValue}>{coolifyResourcesQuery.data?.length ?? '-'}</Text>} />
             {coolifyResourcesQuery.data?.map((r, i) => (
               <View key={r.uuid ?? i} style={[styles.metricRow, styles.rowDivider]}>
                 <Text style={styles.metricLabel} numberOfLines={1}>{r.name}</Text>
-                <Text style={styles.metricValue}>{r.status ?? r.type ?? '-'}</Text>
+                <StatusPill status={String(r.status ?? r.type ?? '-')} />
               </View>
             ))}
           </Card>
@@ -169,9 +142,16 @@ export default function DiagnostikScreen() {
           {(coolifyDomainsQuery.data?.length ?? 0) > 0 && (
             <Card>
               <Text style={styles.rowLabel}>Domain Terdaftar</Text>
-              {coolifyDomainsQuery.data!.map((d, i) => (
-                <Text key={i} style={styles.subtext}>{d}</Text>
-              ))}
+              {coolifyDomainsQuery.data!.map((d, i) => {
+                const isSslip = d.includes('.sslip.io');
+                return (
+                  <View key={i} style={styles.domainRow}>
+                    <View style={[styles.domainDot, isSslip ? styles.domainDotSslip : styles.domainDotCustom]} />
+                    <Text style={styles.domainText} numberOfLines={1}>{d}</Text>
+                    <Text style={styles.domainBadge}>{isSslip ? 'sslip.io' : 'custom'}</Text>
+                  </View>
+                );
+              })}
             </Card>
           )}
         </>
@@ -204,8 +184,6 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg },
   eyebrow: { fontSize: 11, fontWeight: '700', color: colors.inkFaint, letterSpacing: 1 },
   title: { fontSize: 24, fontWeight: '800', color: colors.ink, marginBottom: spacing.lg },
-  fallbackLink: { paddingVertical: spacing.sm, alignItems: 'center' },
-  fallbackLinkText: { fontSize: 12, color: colors.inkMuted, textDecorationLine: 'underline' },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',
@@ -225,4 +203,16 @@ const styles = StyleSheet.create({
   metricValue: { fontSize: 12, fontWeight: '700', color: colors.ink, flexShrink: 1, textAlign: 'right' },
   warnValue: { color: colors.amber },
   rowDivider: { borderTopWidth: 1, borderTopColor: colors.divider },
+  domainRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
+  domainDot: { width: 6, height: 6, borderRadius: 3 },
+  domainDotSslip: { backgroundColor: colors.amber },
+  domainDotCustom: { backgroundColor: colors.green },
+  domainText: { fontSize: 12, color: colors.inkMuted, flex: 1, fontFamily: 'monospace' },
+  domainBadge: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: colors.inkFaint,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
 });

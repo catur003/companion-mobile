@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Alert, Pressable } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { colors, spacing, radius } from '@/lib/theme';
 import { getContainerProcessEnv, listRegisteredProjects } from '@/lib/companionApi';
 import { setCoolifyApplicationEnvsBulk } from '@/lib/coolifyApi';
@@ -78,7 +79,7 @@ export default function CoolifyEnvScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <KeyboardScreen style={styles.screen} contentContainerStyle={styles.content}>
       {projects.length > 1 && (
         <Card>
           <Text style={styles.label}>Project</Text>
@@ -143,7 +144,7 @@ export default function CoolifyEnvScreen() {
         />
         <Button label="Kirim ke Coolify" loading={saveMutation.isPending} onPress={() => saveMutation.mutate()} />
       </Card>
-    </ScrollView>
+    </KeyboardScreen>
   );
 }
 

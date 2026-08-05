@@ -113,8 +113,16 @@ export default function CoolifyProjectMappingScreen() {
 
       <Text style={styles.sectionTitle}>{editingKey ? `Edit: ${editingKey}` : 'Tambah Mapping Baru'}</Text>
       <Card>
-        <FormField label="Key (identifier unik)" placeholder="web-desa" value={key} onChangeText={setKey} autoCapitalize="none" editable={!editingKey} />
-        <FormField label="Nama Tampilan" placeholder="Web Desa" value={name} onChangeText={setName} />
+        <FormField
+          label="Key (identifier unik)"
+          placeholder="web-desa"
+          hint="Internal aja, gak ditampilin ke siapapun. Wajib huruf kecil + dash (contoh: web-desa), gak boleh diubah lagi setelah disimpan."
+          value={key}
+          onChangeText={setKey}
+          autoCapitalize="none"
+          editable={!editingKey}
+        />
+        <FormField label="Nama Tampilan Project" placeholder="Web Desa" value={name} onChangeText={setName} />
 
         <Text style={styles.label}>Application</Text>
         {appsQuery.isLoading && <Text style={styles.mutedText}>Memuat daftar application...</Text>}
