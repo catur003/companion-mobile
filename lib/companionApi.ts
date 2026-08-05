@@ -239,6 +239,48 @@ export async function getDatabaseExportTarget(containerUuid: string, dbName: str
   };
 }
 
+export interface SystemStatus {
+  online: boolean;
+  cpuPercent: number | null;
+  ram: { totalMB: number; usedMB: number; availableMB: number; percent: number } | null;
+  swap: { totalMB: number; usedMB: number; freeMB: number; percent: number } | null;
+  disk: { total: string; used: string; available: string; percent: number } | null;
+  uptime: string | null;
+  loadAverage: { '1min': string; '5min': string; '15min': string } | null;
+}
+
+/** GET /system/status - Dashboard VPS info (port dari vps-manager monitor.js). Gak butuh sudo. */
+export async function getSystemStatus(): Promise<SystemStatus> {
+  const c = await companionClient();
+  return unwrap(c.get('/system/status'));
+}
+
+export interface SshConfigResult {
+  ok: boolean;
+  settings?: Record<string, string>;
+  errorMessage?: string;
+}
+
+/** GET /system/ssh-config - port dari vps-manager security.js. Gak butuh sudo, tapi bisa gagal kalau sshd_config gak world-readable. */
+export async function getSystemSshConfig(): Promise<SshConfigResult> {
+  const c = await companionClient();
+  return unwrap(c.get('/system/ssh-config'));
+}
+
+export interface OpenPort {
+  port: string;
+  address: string;
+  processName: string | null;
+  pid: string | null;
+  process: string;
+}
+
+/** GET /system/open-ports - port dari vps-manager security.js. Gak butuh sudo, tapi nama proses cuma kebaca buat proses milik user yang sama. */
+export async function getSystemOpenPorts(): Promise<{ ok: boolean; ports: OpenPort[]; error?: string }> {
+  const c = await companionClient();
+  return unwrap(c.get('/system/open-ports'));
+}
+
 /** GET /db/schemas - daftar nama schema/database di 1 server MySQL, buat cegah tabrakan nama & resolve project yang numpang. */
 export async function listDatabaseSchemas(databaseUuid: string): Promise<string[]> {
   const c = await companionClient();

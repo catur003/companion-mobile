@@ -1,33 +1,29 @@
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Card } from '@/components/Card';
 import { ProgressBar } from '@/components/ProgressBar';
-import { PmAppCard } from '@/components/PmAppCard';
-import { FadeInUp } from '@/components/FadeInUp';
-import { Button } from '@/components/Button';
 import { AuroraBackground } from '@/components/AuroraBackground';
 import { colors, spacing, radius } from '@/lib/theme';
 import { useTabTopPadding } from '@/lib/useTopInset';
 import { pushIntoTab } from '@/lib/nav';
-import { getMonitorStatus, listPm2Apps, savePm2Startup, ApiError } from '@/lib/api';
 import { CoolifyAppCard } from '@/components/CoolifyAppCard';
 import { isCompanionConfigured, isCoolifyConfigured } from '@/lib/storage';
-import { listRegisteredProjects } from '@/lib/companionApi';
+import { listRegisteredProjects, getSystemStatus } from '@/lib/companionApi';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const topPadding = useTabTopPadding();
+  // UBAH (5 Agustus 2026): backend vps-manager (getMonitorStatus) mati total
+  // (butuh sudo yang gak bisa disetel programatik). Ganti ke Companion API
+  // (getSystemStatus, port 1:1 dari monitor.js vps-manager) - shape field-nya
+  // sama persis (cpuPercent/ram/disk/loadAverage/uptime), UI di bawah gak
+  // perlu diubah sama sekali, cuma sumber datanya yang pindah.
   const monitor = useQuery({
-    queryKey: ['monitor'],
-    queryFn: getMonitorStatus,
-    refetchInterval: 10000,
-  });
-  const pm2Apps = useQuery({
-    queryKey: ['pm2-apps'],
-    queryFn: listPm2Apps,
+    queryKey: ['system-status'],
+    queryFn: getSystemStatus,
     refetchInterval: 10000,
   });
 
@@ -57,25 +53,10 @@ export default function DashboardScreen() {
   });
 
   const { data, isLoading, isError, error, refetch, isRefetching } = monitor;
-  const refreshing = isRefetching || pm2Apps.isRefetching;
 
   const onRefresh = () => {
     refetch();
-    pm2Apps.refetch();
   };
-
-  const saveStartupMutation = useMutation({
-    mutationFn: savePm2Startup,
-    onSuccess: (res) => {
-      const failed = res.results.filter((r) => !r.ok);
-      if (failed.length === 0) {
-        Alert.alert('Berhasil', `Startup list PM2 tersimpan untuk ${res.results.length} user.`);
-      } else {
-        Alert.alert('Sebagian Gagal', failed.map((r) => `${r.user}: ${r.errorMessage ?? 'gagal'}`).join('\n'));
-      }
-    },
-    onError: (err) => Alert.alert('Gagal', err instanceof ApiError ? err.message : 'Terjadi kesalahan.'),
-  });
 
   return (
     <View style={styles.wrap}>
@@ -83,7 +64,7 @@ export default function DashboardScreen() {
       <ScrollView
         style={styles.screen}
         contentContainerStyle={[styles.content, { paddingTop: topPadding }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
       <Text style={styles.eyebrow}>ZENHUB VPS</Text>
       <Text style={styles.title}>Dashboard</Text>
@@ -149,56 +130,25 @@ export default function DashboardScreen() {
           icon="rocket-outline"
           iconBg={colors.accentPinkSoft}
           label="Deploy Baru"
-          onPress={() => pushIntoTab(router, '/(tabs)/deploy', '/(tabs)/deploy/new')}
+          onPress={() => pushIntoTab(router, '/(tabs)/deploy', '/(tabs)/deploy/coolify-new')}
         />
         <QuickAction
           icon="lock-closed-outline"
           iconBg={colors.greenSoft}
-          label="Terbitkan SSL"
-          onPress={() => pushIntoTab(router, '/(tabs)/deploy', '/(tabs)/deploy/ssl')}
+          label="Domain & SSL"
+          onPress={() => pushIntoTab(router, '/(tabs)/deploy', '/(tabs)/deploy/coolify-domain')}
         />
         <QuickAction
           icon="add-circle-outline"
           iconBg={colors.blueSoft}
           label="Buat DB Baru"
-          onPress={() => pushIntoTab(router, '/(tabs)/database', '/(tabs)/database/create')}
+          onPress={() => pushIntoTab(router, '/(tabs)/database', '/(tabs)/database/coolify-new-database')}
         />
       </View>
-
-      <View style={styles.sectionHeaderRow}>
-        <Text style={[styles.sectionTitle, { marginTop: 0, marginBottom: 0 }]}>App yang Jalan</Text>
-        <Button
-          label="Simpan Startup"
-          variant="secondary"
-          loading={saveStartupMutation.isPending}
-          onPress={() => saveStartupMutation.mutate()}
-        />
-      </View>
-      {pm2Apps.isLoading && <Card><Text style={styles.mutedText}>Memuat daftar app...</Text></Card>}
-      {pm2Apps.isError && (
-        <Card style={{ borderColor: colors.redSoft, backgroundColor: colors.redSoft }}>
-          <Text style={{ color: colors.red, fontSize: 13 }}>
-            Gagal ambil daftar app: {(pm2Apps.error as Error)?.message ?? 'unknown error'}
-          </Text>
-        </Card>
-      )}
-      {!pm2Apps.isLoading && !pm2Apps.isError && (pm2Apps.data?.apps.length ?? 0) === 0 && (
-        <Card><Text style={styles.mutedText}>Belum ada app yang terdaftar.</Text></Card>
-      )}
-      {!pm2Apps.isLoading && !pm2Apps.isError && pm2Apps.data?.apps.map((app, i) => (
-        <FadeInUp key={`${app.owner}:${app.name}`} index={i}>
-          <PmAppCard app={app} />
-        </FadeInUp>
-      ))}
-      {(pm2Apps.data?.warnings?.length ?? 0) > 0 && (
-        <Text style={styles.warningText}>
-          {pm2Apps.data!.warnings.join(' | ')}
-        </Text>
-      )}
 
       {coolifyConfigured.data === true && (registeredProjects.data?.length ?? 0) > 0 && (
         <>
-          <Text style={styles.sectionTitle}>Coolify (Beta)</Text>
+          <Text style={styles.sectionTitle}>Coolify</Text>
           {registeredProjects.data!.map((project) => (
             <CoolifyAppCard key={project.key} name={project.name} applicationUuid={project.applicationUuid} />
           ))}

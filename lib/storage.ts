@@ -33,9 +33,16 @@ export async function clearCredentials(): Promise<void> {
   await SecureStore.deleteItemAsync(KEY_API_KEY);
 }
 
+/**
+ * UBAH (5 Agustus 2026): dulu gate ini cek kredensial vps-manager
+ * (baseUrl/apiKey) - backend itu sekarang MATI TOTAL (butuh sudo yang gak
+ * bisa disetel programatik, keputusan user). Ganti ke Companion API -
+ * itu backend PRIMER sekarang (bukan lagi "opsional/beta" kayak awal Fase 4).
+ * Tanpa fix ini, app bakal nyangkut selamanya di onboarding begitu field
+ * vps-manager dihapus dari Settings - gak akan pernah "configured".
+ */
 export async function isConfigured(): Promise<boolean> {
-  const [url, key] = await Promise.all([getBaseUrl(), getApiKey()]);
-  return Boolean(url && key);
+  return isCompanionConfigured();
 }
 
 /**

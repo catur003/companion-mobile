@@ -10,7 +10,6 @@ import { AppModal, AppModalKind, AppModalButton } from './AppModal';
 import { AuroraBackground } from './AuroraBackground';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useTabTopPadding } from '@/lib/useTopInset';
-import { getApiKey, getBaseUrl, setApiKey, setBaseUrl, clearCredentials } from '@/lib/storage';
 import {
   getCompanionBaseUrl,
   getCompanionToken,
@@ -26,7 +25,6 @@ import {
   clearCoolifyCredentials,
 } from '@/lib/storage';
 import { useAuth } from '@/lib/AuthContext';
-import { healthCheck } from '@/lib/api';
 import { companionHealthCheck } from '@/lib/companionApi';
 import { coolifyHealthCheck } from '@/lib/coolifyApi';
 
@@ -56,15 +54,11 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
   const topPadding = useTabTopPadding(spacing.lg);
   const { refresh } = useAuth();
 
-  const [baseUrl, setBaseUrlInput] = useState('');
-  const [apiKey, setApiKeyInput] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState<ModalState>(MODAL_CLOSED);
 
-  // Companion API (Coolify migration, Fase 4) - state terpisah, TIDAK
-  // dicampur sama field vps-manager di atas. Lihat lib/companionApi.ts.
+  // Companion API - backend PRIMER sekarang (bukan lagi "opsional/beta" -
+  // vps-manager yang dulu jadi primer udah mati total, butuh sudo yang gak
+  // bisa disetel programatik). Lihat lib/companionApi.ts.
   const [companionUrl, setCompanionUrlInput] = useState('');
   const [companionToken, setCompanionTokenInput] = useState('');
   const [showCompanionToken, setShowCompanionToken] = useState(false);
@@ -79,11 +73,6 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
   const [coolifySaving, setCoolifySaving] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const [url, key] = await Promise.all([getBaseUrl(), getApiKey()]);
-      if (url) setBaseUrlInput(url);
-      if (key) setApiKeyInput(key);
-    })();
     (async () => {
       const [url, token] = await Promise.all([getCompanionBaseUrl(), getCompanionToken()]);
       if (url) setCompanionUrlInput(url);
@@ -104,80 +93,9 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
     setModal({ visible: true, kind, title, message, buttons: [{ label: 'OK', onPress: closeModal }] });
   }
 
-  async function handleTest() {
-    if (!baseUrl.trim()) {
-      showInfo('warning', 'Isi dulu', 'URL API wajib diisi, mis. https://vps-anda.com/api');
-      return;
-    }
-    setTesting(true);
-    const ok = await healthCheck(baseUrl.trim());
-    setTesting(false);
-    showInfo(
-      ok ? 'success' : 'error',
-      ok ? 'Berhasil' : 'Gagal',
-      ok ? 'Server bisa dihubungi.' : 'Server tidak merespons di URL ini. Cek lagi alamatnya.'
-    );
-  }
-
-  async function handleSave() {
-    if (!baseUrl.trim() || !apiKey.trim()) {
-      showInfo('warning', 'Belum lengkap', 'URL API dan API Key wajib diisi.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await setBaseUrl(baseUrl.trim());
-      await setApiKey(apiKey.trim());
-      // Refresh dulu SEBELUM navigasi, biar pas segments berubah ke
-      // "(tabs)", AuthGate udah lihat configured=true - bukan nilai lama.
-      await refresh();
-      router.replace('/(tabs)');
-    } catch (err) {
-      // Bug fix: sebelumnya gak ada try/catch di sini - kalau SecureStore
-      // gagal nulis (mis. Keystore error di release build), error-nya
-      // ketelan diam-diam: tombol nyangkut loading, data gak ke-save,
-      // isConfigured() tetap false selamanya, dan AuthGate di _layout.tsx
-      // terus nge-bounce user balik ke Settings tiap ganti tab (keliatan
-      // kayak "tab lain gabisa dipencet"). Sekarang errornya ditampilin
-      // biar user tahu ada yang gagal, bukan nyangkut diam-diam.
-      showInfo(
-        'error',
-        'Gagal Menyimpan',
-        `Kredensial gagal disimpan ke perangkat ini: ${err instanceof Error ? err.message : String(err)}`
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function handleReset() {
-    setModal({
-      visible: true,
-      kind: 'warning',
-      title: 'Hapus koneksi?',
-      message: 'API key yang tersimpan di HP ini akan dihapus. Anda perlu isi ulang URL & API key buat pakai app lagi.',
-      buttons: [
-        { label: 'Batal', onPress: closeModal, variant: 'secondary' },
-        {
-          label: 'Hapus',
-          variant: 'danger',
-          onPress: async () => {
-            await clearCredentials();
-            await refresh();
-            setBaseUrlInput('');
-            setApiKeyInput('');
-            closeModal();
-            router.replace('/settings');
-          },
-        },
-      ],
-    });
-  }
-
-  // ---- Companion API (Coolify) - mirror handler di atas, TAPI gak
-  // manggil refresh()/AuthGate sama sekali. Companion API itu opsional/
-  // tambahan (Bagian 3.2: paralel, bukan pengganti) - app tetap harus bisa
-  // dipakai normal buat project VPS lama walau Companion API belum diisi.
+  // ---- Companion API - backend PRIMER sekarang, jadi handler ini yang
+  // manggil refresh()/navigasi tabs (dulu itu perannya vps-manager, yang
+  // sekarang mati total).
   async function handleCompanionTest() {
     if (!companionUrl.trim()) {
       showInfo('warning', 'Isi dulu', 'URL Companion API wajib diisi.');
@@ -202,7 +120,10 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
     try {
       await setCompanionBaseUrl(companionUrl.trim());
       await setCompanionToken(companionToken.trim());
-      showInfo('success', 'Tersimpan', 'Koneksi Companion API tersimpan di perangkat ini.');
+      // Refresh dulu SEBELUM navigasi, biar AuthGate langsung lihat
+      // configured=true - bukan nilai lama (sama pola kayak vps-manager dulu).
+      await refresh();
+      router.replace('/(tabs)');
     } catch (err) {
       showInfo(
         'error',
@@ -219,7 +140,7 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
       visible: true,
       kind: 'warning',
       title: 'Hapus koneksi Companion API?',
-      message: 'URL & token Companion API yang tersimpan di HP ini akan dihapus.',
+      message: 'URL & token Companion API yang tersimpan di HP ini akan dihapus. Ini backend utama app sekarang - app bakal balik ke layar setup.',
       buttons: [
         { label: 'Batal', onPress: closeModal, variant: 'secondary' },
         {
@@ -227,9 +148,11 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
           variant: 'danger',
           onPress: async () => {
             await clearCompanionCredentials();
+            await refresh();
             setCompanionUrlInput('');
             setCompanionTokenInput('');
             closeModal();
+            router.replace('/settings');
           },
         },
       ],
@@ -319,9 +242,9 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
           <Ionicons name="link-outline" size={18} color={colors.accent} />
         </View>
         <Text style={styles.intro}>
-          Hubungkan app ke API vps-manager di server Anda. API key didapat dari perintah{' '}
-          <Text style={styles.code}>npm run api:keygen</Text> di VPS. Server API jalan di localhost:4001 secara
-          default — pastikan sudah dipasang reverse proxy + SSL lewat Nginx, lalu isi URL publiknya di bawah.
+          Hubungkan app ke Companion API di VPS Coolify Anda. Token didapat dari{' '}
+          <Text style={styles.code}>COMPANION_API_TOKEN</Text> di file <Text style={styles.code}>.env</Text> Companion
+          API - isi URL & Token di bawah.
         </Text>
       </Card>
 
@@ -332,45 +255,13 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
         </>
       )}
 
-      <Text style={styles.sectionTitle}>Koneksi Server</Text>
-      <Card>
-        <FormField
-          label="URL API"
-          placeholder="https://vps-anda.com"
-          keyboardType="url"
-          value={baseUrl}
-          onChangeText={setBaseUrlInput}
-        />
-        <FormField
-          label="API Key"
-          placeholder="Tempel API key di sini"
-          secureTextEntry={!showKey}
-          value={apiKey}
-          onChangeText={setApiKeyInput}
-          rightElement={
-            <Pressable hitSlop={8} onPress={() => setShowKey((v) => !v)}>
-              <Ionicons name={showKey ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.inkFaint} />
-            </Pressable>
-          }
-        />
-        <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
-          <View style={{ flex: 1 }}>
-            <Button label="Tes Koneksi" variant="secondary" loading={testing} onPress={handleTest} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Button label="Simpan" loading={saving} onPress={handleSave} />
-          </View>
-        </View>
-      </Card>
-
-      <Text style={styles.sectionTitle}>Companion API (Coolify — Beta)</Text>
+      <Text style={styles.sectionTitle}>Companion API</Text>
       <Card style={styles.introCard}>
         <View style={styles.introIconWrap}>
           <Ionicons name="git-branch-outline" size={18} color={colors.accent} />
         </View>
         <Text style={styles.intro}>
-          Opsional. Isi ini cuma buat project yang sudah pindah ke Coolify (mis. PORTOFOLIO). Project lain tetap
-          pakai koneksi vps-manager di atas — dua-duanya bisa aktif bareng selama masa migrasi.
+          Backend utama app ini - jalan di VPS Coolify Anda via pm2. Wajib diisi buat app ini bisa dipakai.
         </Text>
       </Card>
       <Card>
@@ -414,8 +305,8 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
           <Ionicons name="cube-outline" size={18} color={colors.accent} />
         </View>
         <Text style={styles.intro}>
-          Buat start/stop/restart & lihat status app langsung dari Coolify (setara PM2 di atas). Token bisa sama
-          persis dengan COOLIFY_API_TOKEN yang udah diisi di .env Companion API - instance Coolify yang sama.
+          Buat start/stop/restart & lihat status app langsung dari Coolify. Token bisa sama persis dengan
+          COOLIFY_API_TOKEN yang udah diisi di .env Companion API - instance Coolify yang sama.
         </Text>
       </Card>
       <Card>
@@ -453,30 +344,6 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
         )}
       </Card>
 
-      <Text style={styles.sectionTitle}>Data & Cache</Text>
-      <Card onPress={() => router.push('/cleanup')} style={styles.rowCard}>
-        <View style={[styles.rowIconWrap, { backgroundColor: colors.blueSoft }]}>
-          <Ionicons name="trash-bin-outline" size={18} color={colors.blue} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowTitle}>Bersihkan Cache Project</Text>
-          <Text style={styles.rowSub}>Hapus .next/cache & node_modules/.cache tiap project di VPS</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
-      </Card>
-
-      <Text style={styles.sectionTitle}>Deploy</Text>
-      <Card onPress={() => router.push('/github-accounts')} style={styles.rowCard}>
-        <View style={[styles.rowIconWrap, { backgroundColor: colors.accentSoft }]}>
-          <Ionicons name="logo-github" size={18} color={colors.accent} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowTitle}>Akun GitHub</Text>
-          <Text style={styles.rowSub}>Kelola akun/token buat deploy repo private</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.inkFaint} />
-      </Card>
-
       <Text style={styles.sectionTitle}>Tentang</Text>
       <Card onPress={() => Linking.openURL('https://github.com/catur003')} style={styles.rowCard}>
         <View style={[styles.rowIconWrap, { backgroundColor: colors.accentSoft }]}>
@@ -490,13 +357,13 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
       </Card>
 
       <Text style={[styles.sectionTitle, { color: colors.red }]}>Zona Berbahaya</Text>
-      <Card style={styles.dangerCard} onPress={handleReset}>
+      <Card style={styles.dangerCard} onPress={handleCompanionReset}>
         <View style={[styles.rowIconWrap, { backgroundColor: colors.redSoft }]}>
           <Ionicons name="log-out-outline" size={18} color={colors.red} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.rowTitle, { color: colors.red }]}>Hapus Koneksi Tersimpan</Text>
-          <Text style={styles.rowSub}>URL & API key akan dihapus dari HP ini</Text>
+          <Text style={styles.rowSub}>Companion API - URL & token akan dihapus dari HP ini</Text>
         </View>
       </Card>
 
