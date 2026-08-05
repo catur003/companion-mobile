@@ -446,6 +446,30 @@ export async function getDiagnosticContainerDetail(id: string): Promise<Diagnost
   return unwrap(c.get(`/diagnostics/containers/${encodeURIComponent(id)}`));
 }
 
+// ===================== Audit Log =====================
+
+export interface AuditLogEntry {
+  timestamp: string;
+  action: string;
+  ok?: boolean;
+  [key: string]: unknown;
+}
+
+/** GET /audit/recent - N entry terakhir dari audit log Companion API (newest-first, dari server). */
+export async function getRecentAuditLog(limit = 50): Promise<AuditLogEntry[]> {
+  const c = await companionClient();
+  const result = await unwrap<{ entries: AuditLogEntry[] }>(c.get('/audit/recent', { params: { limit } }));
+  return result.entries;
+}
+
+// ===================== Push Notification =====================
+
+/** POST /push-token - simpan Expo push token device ini ke VPS, dipakai relay notifikasi webhook Coolify. */
+export async function registerPushToken(token: string): Promise<void> {
+  const c = await companionClient();
+  await unwrap<void>(c.post('/push-token', { token }));
+}
+
 /**
  * POST /db/migrate - generate command + kirim ke field Post-deployment Coolify
  * lewat PATCH /api/v1/applications/{uuid}. Mode "push_force"/"seed" butuh

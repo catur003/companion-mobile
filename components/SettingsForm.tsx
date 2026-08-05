@@ -25,8 +25,10 @@ import {
   clearCoolifyCredentials,
 } from '@/lib/storage';
 import { useAuth } from '@/lib/AuthContext';
-import { companionHealthCheck } from '@/lib/companionApi';
+import { companionHealthCheck, registerPushToken } from '@/lib/companionApi';
 import { coolifyHealthCheck } from '@/lib/coolifyApi';
+import { requestPushPermissionAndGetToken } from '@/lib/push';
+import { ApiError } from '@/lib/api';
 
 interface ModalState {
   visible: boolean;
@@ -71,6 +73,9 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
   const [showCoolifyToken, setShowCoolifyToken] = useState(false);
   const [coolifyTesting, setCoolifyTesting] = useState(false);
   const [coolifySaving, setCoolifySaving] = useState(false);
+
+  // Push notification (5 Agustus 2026) - relay dari webhook Coolify.
+  const [pushRegistering, setPushRegistering] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -218,6 +223,29 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
     });
   }
 
+  // ---- Push notification - relay webhook Coolify (Bagian belum ada
+  // sebelumnya, ditambah 5 Agustus 2026).
+  async function handleActivatePush() {
+    setPushRegistering(true);
+    try {
+      const result = await requestPushPermissionAndGetToken();
+      if (!result.ok || !result.token) {
+        showInfo('error', 'Gagal Aktifkan Notifikasi', result.errorMessage ?? 'Terjadi kesalahan tak terduga.');
+        return;
+      }
+      await registerPushToken(result.token);
+      showInfo(
+        'success',
+        'Notifikasi Aktif',
+        'Push token tersimpan di VPS. Notifikasi bakal masuk kalau webhook Coolify udah disetel ngarah ke Companion API (lihat .env.example: COOLIFY_WEBHOOK_SECRET).'
+      );
+    } catch (err) {
+      showInfo('error', 'Gagal', err instanceof ApiError ? err.message : 'Terjadi kesalahan tak terduga.');
+    } finally {
+      setPushRegistering(false);
+    }
+  }
+
   return (
     <View style={{ flex: 1 }}>
       {variant === 'tab' && <AuroraBackground />}
@@ -332,6 +360,21 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
             <Button label="Simpan" loading={coolifySaving} onPress={handleCoolifySave} />
           </View>
         </View>
+      </Card>
+
+      <Text style={styles.sectionTitle}>Notifikasi</Text>
+      <Card style={styles.introCard}>
+        <View style={styles.introIconWrap}>
+          <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+        </View>
+        <Text style={styles.intro}>
+          Notifikasi deploy gagal/container down, direlay dari webhook Coolify lewat Companion API. Butuh
+          COOLIFY_WEBHOOK_SECRET diset di .env Companion API + webhook custom disetel di dashboard Coolify
+          (Notifications → Custom Webhook) - lihat .env.example.
+        </Text>
+      </Card>
+      <Card>
+        <Button label="Aktifkan Notifikasi Push" loading={pushRegistering} onPress={handleActivatePush} />
       </Card>
 
       <Text style={styles.sectionTitle}>Tentang</Text>

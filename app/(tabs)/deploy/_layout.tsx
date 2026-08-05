@@ -18,7 +18,7 @@ export default function DeployStackLayout() {
         headerShadowVisible: false,
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Deploy' }} />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="coolify-files" options={{ title: 'File Viewer Coolify (Beta)', presentation: 'modal' }} />
       <Stack.Screen name="coolify-new" options={{ title: 'Deploy Baru (Coolify Beta)', presentation: 'modal' }} />
       <Stack.Screen name="coolify-logs" options={{ title: 'Log Coolify (Beta)', presentation: 'modal' }} />

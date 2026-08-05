@@ -20,6 +20,7 @@ export default function DiagnostikStackLayout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="containers/index" options={{ title: 'Container Docker' }} />
       <Stack.Screen name="containers/[id]" options={{ title: 'Detail Container' }} />
+      <Stack.Screen name="audit-log" options={{ title: 'Riwayat Aktivitas' }} />
     </Stack>
   );
 }

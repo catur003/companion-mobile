@@ -17,7 +17,7 @@ export default function DatabaseStackLayout() {
         headerShadowVisible: false,
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Database' }} />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="coolify-query" options={{ title: 'Coolify SQL (Beta)', presentation: 'modal' }} />
       <Stack.Screen name="coolify-new-database" options={{ title: 'Buat Database Coolify (Beta)', presentation: 'modal' }} />
       <Stack.Screen name="coolify-container-db/index" options={{ title: 'Kelola Container Database (Beta)' }} />

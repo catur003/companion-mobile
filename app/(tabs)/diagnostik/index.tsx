@@ -161,6 +161,14 @@ export default function DiagnostikScreen() {
         />
       )}
 
+      {companionConfigured.data === true && (
+        <Button
+          label="Riwayat Aktivitas (Audit Log)"
+          variant="secondary"
+          onPress={() => router.push('/(tabs)/diagnostik/audit-log')}
+        />
+      )}
+
       {companionConfigured.data !== true && coolifyConfigured.data !== true && (
         <Card>
           <Text style={styles.subtext}>Belum ada koneksi Companion API/Coolify - isi dulu di Setelan.</Text>

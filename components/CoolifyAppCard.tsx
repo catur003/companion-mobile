@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator, Linking } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -118,6 +119,26 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
     );
   }
 
+  // BARU (5 Agustus 2026) - domain di card sebelumnya cuma teks statis, gak
+  // bisa di-tap. Tap = langsung buka di browser (paling sering dipakai: cek
+  // app abis deploy). Long-press = copy ke clipboard (buat share link).
+  // Pakai `onPress`/`onLongPress` BAWAAN <Text> - gak perlu bungkus Pressable
+  // terpisah, karena domain ini nempel di tengah kalimat <Text> lain
+  // (Pressable gak bisa nested di dalam Text di React Native).
+  function handleDomainPress() {
+    const fqdn = appQuery.data?.fqdn;
+    if (!fqdn) return;
+    const url = fqdn.startsWith('http') ? fqdn : `https://${fqdn}`;
+    Linking.openURL(url).catch(() => Alert.alert('Gagal Buka', 'Gak bisa buka domain ini di browser.'));
+  }
+
+  async function handleDomainCopy() {
+    const fqdn = appQuery.data?.fqdn;
+    if (!fqdn) return;
+    await Clipboard.setStringAsync(fqdn.replace(/^https?:\/\//, ''));
+    Alert.alert('Disalin', 'Domain udah disalin ke clipboard.');
+  }
+
   // "status" belum diverifikasi bentuknya persis apa dari Coolify API (lihat
   // catatan di coolifyApi.ts) - deteksi "online" dilonggarkan (includes,
   // bukan exact-match) supaya format kayak "running:healthy" tetap kebaca,
@@ -146,7 +167,14 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
                 {' '}
                 <Text style={{ color: appQuery.data.fqdn.includes('.sslip.io') ? colors.amber : colors.green }}>•</Text>
                 {' '}
-                {appQuery.data.fqdn.replace(/^https?:\/\//, '')}
+                <Text
+                  style={styles.domainLink}
+                  onPress={handleDomainPress}
+                  onLongPress={handleDomainCopy}
+                  suppressHighlighting
+                >
+                  {appQuery.data.fqdn.replace(/^https?:\/\//, '')}
+                </Text>
               </>
             ) : null}
             {restartCount != null ? (
@@ -261,6 +289,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   name: { fontSize: 14, fontWeight: '700', color: colors.ink },
   meta: { fontSize: 11, color: colors.inkMuted, marginTop: 2 },
+  domainLink: { color: colors.accent, textDecorationLine: 'underline' },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
