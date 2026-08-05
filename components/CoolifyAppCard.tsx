@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,13 +51,13 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
   // sebenernya masih transisi. Durasi beda per action (lihat SETTLE_MS) -
   // safety net kalau status gak kunjung berubah dari yang diharapkan.
   const [settling, setSettling] = useState(false);
+  const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!settling || !pending) return;
-    const t = setTimeout(() => setSettling(false), SETTLE_MS[pending] ?? 20000);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settling]);
+    return () => {
+      if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
+    };
+  }, []);
 
   const appQuery = useQuery({
     queryKey: ['coolify-app', applicationUuid],
@@ -90,8 +90,16 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
     setPending(kind);
     try {
       await fn();
-      setSettling(true);
       invalidate();
+      setSettling(true);
+      // FIX (5 Agustus 2026, bug nyata: badge "Deploy..." nyangkut selamanya)
+      // - SEBELUMNYA timer ini dipasang di useEffect yang ngecek state
+      // "pending", tapi "pending" udah ke-null-in duluan (finally block)
+      // SEBELUM effect-nya sempet baca - race condition, setTimeout gak
+      // pernah kepasang. Sekarang dipasang LANGSUNG di sini, pake "kind"
+      // (closure variable, bukan state) - gak ada race sama sekali.
+      if (settleTimeoutRef.current) clearTimeout(settleTimeoutRef.current);
+      settleTimeoutRef.current = setTimeout(() => setSettling(false), SETTLE_MS[kind] ?? 20000);
     } catch (err) {
       Alert.alert('Gagal', err instanceof ApiError ? err.message : 'Terjadi kesalahan tak terduga.');
     } finally {
