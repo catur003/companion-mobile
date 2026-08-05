@@ -42,9 +42,10 @@ export default function DiagnosticContainerDetailScreen() {
         <>
           <Card>
             <View style={styles.row}>
-              <Text style={styles.name} numberOfLines={1}>{d.name}</Text>
+              <Text style={styles.name} numberOfLines={1}>{d.friendlyName ?? d.name}</Text>
               <StatusPill status={d.state} />
             </View>
+            {d.friendlyName && <Text style={styles.rawName} numberOfLines={1}>{d.name}</Text>}
             <Text style={styles.mono}>{d.image}</Text>
           </Card>
 
@@ -138,6 +139,7 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 13, color: colors.red, fontWeight: '600' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   name: { fontSize: 15, fontWeight: '700', color: colors.ink, flexShrink: 1, marginRight: spacing.sm },
+  rawName: { fontSize: 10.5, fontFamily: 'monospace', color: colors.inkFaint, marginBottom: 4 },
   mono: { fontSize: 11.5, fontFamily: 'monospace', color: colors.inkMuted },
   sectionTitle: {
     fontSize: 11,

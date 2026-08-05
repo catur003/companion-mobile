@@ -389,6 +389,9 @@ export interface DiagnosticContainerSummary {
   status: string;
   createdAt: string;
   ports: DiagnosticContainerPort[];
+  /** Hasil cocokin ke projects.json ("Infra Coolify" utk container inti, nama project kalau match, null kalau gak dikenal). */
+  friendlyName: string | null;
+  category: 'infra' | 'app' | 'unknown';
 }
 
 /** GET /diagnostics/containers - docker ps, SEMUA container termasuk infra Coolify sendiri. */
@@ -433,6 +436,8 @@ export interface DiagnosticContainerDetail {
   env: DiagnosticEnvEntry[];
   resources: DiagnosticContainerResources | null;
   resourcesError?: string;
+  friendlyName: string | null;
+  category: 'infra' | 'app' | 'unknown';
 }
 
 /** GET /diagnostics/containers/:id - inspect + stats digabung. Env var sensitif udah di-mask server-side. */

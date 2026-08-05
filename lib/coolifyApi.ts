@@ -166,6 +166,37 @@ export interface DeploymentDetail {
 }
 
 /**
+ * GET /deployments/applications/{uuid} - riwayat deploy KHUSUS 1 app,
+ * APAPUN statusnya (beda dari listActiveDeployments yang cuma nampung
+ * in_progress/queued). BARU (5 Agustus 2026) - nutup gap "log ilang kalau
+ * app di-reload": data ini kesimpen di server Coolify (bukan cache lokal
+ * ZenVPS), jadi survive reload - dipakai buat nyari "deployment TERAKHIR"
+ * begitu layar Log dibuka, TANPA nunggu ada yang aktif dulu.
+ *
+ * ⚠️ BELUM DITES end-to-end ke instance nyata (endpoint ini ditemukan dari
+ * dokumentasi pihak ketiga/MCP wrapper, BUKAN dari curl langsung kayak
+ * endpoint lain di file ini) - shape response & field id/created_at di bawah
+ * ASUMSI, verifikasi dulu manual sebelum dianggap final.
+ */
+export async function getApplicationDeploymentHistory(applicationUuid: string): Promise<CoolifyDeploymentSummary[]> {
+  const c = await coolifyClient();
+  try {
+    const res = await c.get(`/deployments/applications/${encodeURIComponent(applicationUuid)}`);
+    const raw = Array.isArray(res.data) ? res.data : Array.isArray(res.data?.data) ? res.data.data : [];
+    return raw.map((d: Record<string, unknown>) => ({
+      deployment_uuid: String(d.deployment_uuid),
+      application_uuid: applicationUuid, // udah pasti app ini, gak perlu extract dari URL kayak listActiveDeployments
+      application_name: String(d.application_name ?? ''),
+      status: String(d.status ?? ''),
+      deployment_url: String(d.deployment_url ?? ''),
+      id: Number(d.id ?? 0),
+    }));
+  } catch (err) {
+    throw toApiError(err, 'Gagal ambil riwayat deployment app dari Coolify.');
+  }
+}
+
+/**
  * GET /deployments/{uuid} - endpoint SPESIFIK (1 objek, ringan), ini yang
  * di-POLLING tiap 1-2 detik, BUKAN listActiveDeployments (itu daftar umum,
  * cuma dipanggil sekali buat nemuin deployment_uuid yang aktif).

@@ -9,6 +9,7 @@ import { colors, spacing, radius } from '@/lib/theme';
 import {
   getCoolifyApplicationLogs,
   findActiveDeploymentForApp,
+  getApplicationDeploymentHistory,
   getDeploymentDetail,
   DeploymentLogStep,
 } from '@/lib/coolifyApi';
@@ -85,6 +86,33 @@ export default function CoolifyLogsScreen() {
     enabled: Boolean(selectedProject) && activeTab === 'build',
     refetchInterval: 5000, // tetep dicek berkala, biar deploy baru kedetect otomatis
   });
+
+  // FIX (5 Agustus 2026, bug nyata: "log ilang begitu app di-reload" - beda
+  // dari "tutup-buka layar" yang udah difix di atas): trackedQuery itu SLOT
+  // CACHE doang, kosong total begitu app di-kill/reload (RAM, gak persist).
+  // activeSearchQuery di atas CUMA nemuin yang statusnya in_progress/queued -
+  // begitu deploy kelar & app di-reload, gak ada lagi yang "aktif" buat
+  // ditemuin, hasilnya "Belum ada deploy yang tercatat" padahal riwayatnya
+  // ADA, cuma kesimpen di server Coolify, bukan di app. Query BARU ini nyari
+  // riwayat lengkap (apapun statusnya) - dipanggil begitu layar dibuka,
+  // hasilnya dipake buat SEEDING trackedDeploymentUuid, TAPI CUMA kalau
+  // belum ke-set - activeSearchQuery tetep yang menang kalau nemu yang lebih
+  // baru & masih aktif (lihat effect di bawah).
+  const historyQuery = useQuery({
+    queryKey: ['deployment-history', selectedProject?.applicationUuid],
+    queryFn: () => getApplicationDeploymentHistory(selectedProject!.applicationUuid),
+    enabled: Boolean(selectedProject) && activeTab === 'build',
+    staleTime: 30000,
+  });
+
+  useEffect(() => {
+    if (trackedDeploymentUuid || !selectedProject) return; // udah ke-seed (dari sesi ini atau dari effect active di bawah) - jangan timpa
+    const history = historyQuery.data;
+    if (!history || history.length === 0) return;
+    const mostRecent = history.reduce((newest, d) => (d.id > newest.id ? d : newest));
+    qc.setQueryData(['last-known-deployment', selectedProject.applicationUuid], mostRecent.deployment_uuid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyQuery.data, trackedDeploymentUuid, selectedProject?.applicationUuid]);
 
   useEffect(() => {
     const found = activeSearchQuery.data?.deployment_uuid;
@@ -218,8 +246,8 @@ export default function CoolifyLogsScreen() {
                   isBuildSuccess && { color: colors.green },
                 ]}
               >
-                {activeSearchQuery.isLoading && !trackedDeploymentUuid
-                  ? 'Nyari deployment...'
+                {(activeSearchQuery.isLoading || historyQuery.isLoading) && !trackedDeploymentUuid
+                  ? 'Nyari riwayat deploy...'
                   : !trackedDeploymentUuid
                     ? 'Belum ada deploy yang tercatat buat project ini.'
                     : `${buildStatus}${isBuildActive ? ' · polling tiap 2 detik' : ''}`}
@@ -244,7 +272,7 @@ export default function CoolifyLogsScreen() {
                 </Text>
               )}
               ListEmptyComponent={
-                !activeSearchQuery.isLoading && !trackedDeploymentUuid ? (
+                !activeSearchQuery.isLoading && !historyQuery.isLoading && !trackedDeploymentUuid ? (
                   <Card style={{ margin: spacing.lg }}>
                     <Text style={styles.mutedText}>
                       Trigger Start/Deploy/Restart (dari app atau dashboard Coolify) buat lihat log build-nya di sini.

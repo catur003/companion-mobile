@@ -51,9 +51,14 @@ export default function DiagnosticContainersScreen() {
       {containers.map((c) => (
         <Card key={c.fullId} onPress={() => router.push(`/(tabs)/diagnostik/containers/${c.id}`)}>
           <View style={styles.row}>
-            <Text style={styles.name} numberOfLines={1}>{c.name}</Text>
+            <Text style={styles.name} numberOfLines={1}>
+              {c.friendlyName ?? c.name}
+            </Text>
             <StatusPill status={c.state} />
           </View>
+          {c.friendlyName && (
+            <Text style={styles.rawName} numberOfLines={1}>{c.name}</Text>
+          )}
           <Text style={styles.image} numberOfLines={1}>{c.image}</Text>
           <Text style={styles.status}>{c.status}</Text>
           {c.ports.length > 0 && (
@@ -82,6 +87,7 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 13, color: colors.red, fontWeight: '600' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   name: { fontSize: 14, fontWeight: '700', color: colors.ink, flexShrink: 1, marginRight: spacing.sm },
+  rawName: { fontSize: 10.5, fontFamily: 'monospace', color: colors.inkFaint, marginBottom: 2 },
   image: { fontSize: 11.5, fontFamily: 'monospace', color: colors.inkMuted },
   status: { fontSize: 11.5, color: colors.inkFaint, marginTop: 2 },
   ports: { fontSize: 11, fontFamily: 'monospace', color: colors.inkFaint, marginTop: 4 },
