@@ -173,16 +173,16 @@ export interface DeploymentDetail {
  * ZenVPS), jadi survive reload - dipakai buat nyari "deployment TERAKHIR"
  * begitu layar Log dibuka, TANPA nunggu ada yang aktif dulu.
  *
- * ⚠️ BELUM DITES end-to-end ke instance nyata (endpoint ini ditemukan dari
- * dokumentasi pihak ketiga/MCP wrapper, BUKAN dari curl langsung kayak
- * endpoint lain di file ini) - shape response & field id/created_at di bawah
- * ASUMSI, verifikasi dulu manual sebelum dianggap final.
+ * CONFIRMED via curl langsung ke instance produksi (5 Agustus 2026): shape
+ * aslinya {count, deployments:[...]} - BUKAN array langsung, BUKAN
+ * {data:[...]} kayak asumsi awal. Field per-item: id (number), status,
+ * deployment_uuid, created_at, dst.
  */
 export async function getApplicationDeploymentHistory(applicationUuid: string): Promise<CoolifyDeploymentSummary[]> {
   const c = await coolifyClient();
   try {
     const res = await c.get(`/deployments/applications/${encodeURIComponent(applicationUuid)}`);
-    const raw = Array.isArray(res.data) ? res.data : Array.isArray(res.data?.data) ? res.data.data : [];
+    const raw = Array.isArray(res.data?.deployments) ? res.data.deployments : [];
     return raw.map((d: Record<string, unknown>) => ({
       deployment_uuid: String(d.deployment_uuid),
       application_uuid: applicationUuid, // udah pasti app ini, gak perlu extract dari URL kayak listActiveDeployments
