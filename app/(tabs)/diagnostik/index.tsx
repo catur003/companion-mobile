@@ -80,10 +80,6 @@ export default function DiagnostikScreen() {
       <Text style={styles.title}>Diagnostik</Text>
 
       <Button
-        label="Container Docker (ps / stats / inspect)"
-        onPress={() => router.push('/(tabs)/diagnostik/containers')}
-      />
-      <Button
         label="Buka Terminal SSH"
         variant="secondary"
         onPress={() => pushIntoTab(router, '/(tabs)/deploy', '/(tabs)/deploy/ssh-terminal')}
@@ -157,6 +153,14 @@ export default function DiagnostikScreen() {
         </>
       )}
 
+      {companionConfigured.data === true && (
+        <Button
+          label="Container Docker (ps / stats / inspect)"
+          variant="secondary"
+          onPress={() => router.push('/(tabs)/diagnostik/containers')}
+        />
+      )}
+
       {companionConfigured.data !== true && coolifyConfigured.data !== true && (
         <Card>
           <Text style={styles.subtext}>Belum ada koneksi Companion API/Coolify - isi dulu di Setelan.</Text>
@@ -181,9 +185,9 @@ const styles = StyleSheet.create({
   wrap: { flex: 1 },
   // transparent - AuroraBackground dipasang di dalam `wrap` di atas.
   screen: { flex: 1, backgroundColor: 'transparent' },
-  content: { padding: spacing.lg },
+  content: { padding: spacing.lg, gap: spacing.md },
   eyebrow: { fontSize: 11, fontWeight: '700', color: colors.inkFaint, letterSpacing: 1 },
-  title: { fontSize: 24, fontWeight: '800', color: colors.ink, marginBottom: spacing.lg },
+  title: { fontSize: 24, fontWeight: '800', color: colors.ink },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',

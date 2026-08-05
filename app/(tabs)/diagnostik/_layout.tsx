@@ -17,7 +17,7 @@ export default function DiagnostikStackLayout() {
         headerShadowVisible: false,
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Diagnostik' }} />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="containers/index" options={{ title: 'Container Docker' }} />
       <Stack.Screen name="containers/[id]" options={{ title: 'Detail Container' }} />
     </Stack>

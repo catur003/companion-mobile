@@ -141,10 +141,17 @@ export function CoolifyAppCard({ name, applicationUuid }: { name: string; applic
           <Text style={styles.name}>{name}</Text>
           <Text style={styles.meta}>
             Coolify
-            {appQuery.data?.fqdn ? ` · ${appQuery.data.fqdn.replace(/^https?:\/\//, '')}` : ''}
+            {appQuery.data?.fqdn ? (
+              <>
+                {' '}
+                <Text style={{ color: appQuery.data.fqdn.includes('.sslip.io') ? colors.amber : colors.green }}>•</Text>
+                {' '}
+                {appQuery.data.fqdn.replace(/^https?:\/\//, '')}
+              </>
+            ) : null}
             {restartCount != null ? (
               <Text style={restartWarn ? { color: restartWarn, fontWeight: '700' } : undefined}>
-                {' · '}Restart {restartCount}x
+                {' '}<Text style={{ color: colors.inkFaint }}>•</Text>{' '}Restart {restartCount}x
               </Text>
             ) : restartQuery.isError ? (
               <Text style={{ color: colors.inkFaint }}> · Restart: gagal ambil data</Text>
