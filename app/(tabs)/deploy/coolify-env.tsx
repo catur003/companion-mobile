@@ -97,6 +97,8 @@ export default function CoolifyEnvScreen() {
         </View>
         </Card>
       )}
+
+      <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>Lihat (value asli, proses yang jalan)</Text>
         <Pressable onPress={() => envQuery.refetch()}>
           <Ionicons name="refresh" size={18} color={colors.accent} />
