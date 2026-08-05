@@ -70,19 +70,22 @@ export default function CoolifyDomainScreen() {
       </Card>
 
       {projects.length > 1 && (
-        <View style={styles.chipRow}>
-          {projects.map((p) => (
-            <Pressable
-              key={p.key}
-              onPress={() => setSelectedKey(p.key)}
-              style={[styles.chip, (selectedKey ?? projects[0].key) === p.key && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, (selectedKey ?? projects[0].key) === p.key && styles.chipTextActive]}>
-                {p.name}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <Card>
+          <Text style={styles.label}>Project</Text>
+          <View style={styles.chipRow}>
+            {projects.map((p) => (
+              <Pressable
+                key={p.key}
+                onPress={() => setSelectedKey(p.key)}
+                style={[styles.chip, (selectedKey ?? projects[0].key) === p.key && styles.chipActive]}
+              >
+                <Text style={[styles.chipText, (selectedKey ?? projects[0].key) === p.key && styles.chipTextActive]}>
+                  {p.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Card>
       )}
 
       <Card>

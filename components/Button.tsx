@@ -7,13 +7,19 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 interface ButtonProps {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'danger' | 'secondary';
+  // "warning" (amber) BARU (5 Agustus 2026) - buat aksi resiko-sedang (mis.
+  // "Seed" data, nambah/nimpa data tapi biasanya bisa diulang) yang beda
+  // kelas dari "danger" (merah, buat aksi DESTRUKTIF PERMANEN kayak push
+  // --accept-data-loss/hapus database). User minta dibedain, sebelumnya
+  // dua-duanya kepaksa sama-sama merah.
+  variant?: 'primary' | 'danger' | 'warning' | 'secondary';
   loading?: boolean;
   disabled?: boolean;
 }
 
 export function Button({ label, onPress, variant = 'primary', loading, disabled }: ButtonProps) {
-  const bg = variant === 'primary' ? colors.accent : variant === 'danger' ? colors.red : colors.card;
+  const bg =
+    variant === 'primary' ? colors.accent : variant === 'danger' ? colors.red : variant === 'warning' ? colors.amber : colors.card;
   const fg = variant === 'secondary' ? colors.ink : colors.onAccent;
   const scale = useRef(new Animated.Value(1)).current;
   const isDisabled = disabled || loading;

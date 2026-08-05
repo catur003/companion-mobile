@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -351,35 +352,57 @@ function DatabaseRow({
   onDelete: () => void;
   deleting: boolean;
 }) {
+  const busy = infoLoading || exporting || deleting || Boolean(activeJobId);
   return (
     <Card style={styles.dbCard}>
       <View style={styles.dbHeaderRow}>
-        <Text style={styles.dbName}>{db.name}</Text>
-        <Text style={styles.dbMeta}>{db.isDefault ? 'Default (dibuat Coolify)' : 'Numpang'}</Text>
-      </View>
-      <View style={styles.dbActionsRow}>
         <View style={{ flex: 1 }}>
-          <Button label="Lihat Tabel" variant="secondary" onPress={onBrowse} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button label="Info Koneksi" variant="secondary" loading={infoLoading} onPress={onInfo} />
-        </View>
-      </View>
-      <View style={styles.dbActionsRow}>
-        <View style={{ flex: 1 }}>
-          <Button label="Import" variant="secondary" disabled={Boolean(activeJobId)} onPress={onImport} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button label="Export" variant="secondary" loading={exporting} onPress={onExport} />
+          <Text style={styles.dbName}>{db.name}</Text>
+          <Text style={styles.dbMeta}>{db.isDefault ? 'Default · dibuat Coolify' : 'Numpang'}</Text>
         </View>
         {!db.isDefault && (
-          <View style={{ flex: 1 }}>
-            <Button label="Hapus" variant="danger" loading={deleting} onPress={onDelete} />
-          </View>
+          <Pressable onPress={onDelete} disabled={busy} hitSlop={8} style={{ opacity: busy ? 0.4 : 1 }}>
+            {deleting ? <ActivityIndicator size="small" color={colors.red} /> : <Ionicons name="trash-outline" size={18} color={colors.red} />}
+          </Pressable>
         )}
+      </View>
+      <View style={styles.dbActionsRow}>
+        <ActionBtn icon="grid-outline" label="Lihat Tabel" onPress={onBrowse} disabled={busy} />
+        <ActionBtn icon="key-outline" label="Info Koneksi" onPress={onInfo} loading={infoLoading} disabled={busy} />
+        <ActionBtn icon="cloud-upload-outline" label="Import" onPress={onImport} disabled={Boolean(activeJobId) || busy} />
+        <ActionBtn icon="cloud-download-outline" label="Export" onPress={onExport} loading={exporting} disabled={busy} />
       </View>
       {activeJobId && <ImportJobStatus jobId={activeJobId} onSettled={onJobSettled} />}
     </Card>
+  );
+}
+
+function ActionBtn({
+  icon,
+  label,
+  onPress,
+  loading,
+  disabled,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [styles.actionBtn, (pressed || disabled) && styles.actionBtnDisabled]}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.accent} />
+      ) : (
+        <Ionicons name={icon} size={17} color={colors.accent} />
+      )}
+      <Text style={styles.actionLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -393,10 +416,20 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, fontWeight: '700', color: colors.inkMuted, marginBottom: spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   dbCard: { gap: spacing.sm },
-  dbHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  dbHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
   dbName: { fontSize: 14, fontWeight: '700', color: colors.ink, fontFamily: 'monospace' },
-  dbMeta: { fontSize: 11, color: colors.inkFaint },
-  dbActionsRow: { flexDirection: 'row', gap: spacing.sm },
+  dbMeta: { fontSize: 11, color: colors.inkFaint, marginTop: 2 },
+  dbActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    paddingTop: spacing.sm,
+  },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
+  actionBtnDisabled: { opacity: 0.4 },
+  actionLabel: { fontSize: 12, fontWeight: '700', color: colors.accent },
   jobStatusRow: { gap: 4, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: colors.divider, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   jobStatusText: { fontSize: 12, fontWeight: '700', color: colors.inkMuted },
   jobErrorText: { fontSize: 11, color: colors.red, fontFamily: 'monospace', width: '100%' },

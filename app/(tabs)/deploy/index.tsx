@@ -39,14 +39,16 @@ export default function DeployScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.wrap}>
       <AuroraBackground />
       <ScrollView
+        style={styles.screen}
         contentContainerStyle={[styles.content, { paddingTop: topPadding }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <Text style={styles.eyebrow}>ZENHUB VPS</Text>
         <Text style={styles.title}>Deploy</Text>
+
 
         {coolifyConfigured.data === true && (
           <Card onPress={() => router.push('/(tabs)/deploy/coolify-domain')} style={styles.coolifyLink}>
@@ -125,6 +127,13 @@ export default function DeployScreen() {
 }
 
 const styles = StyleSheet.create({
+  // AuroraBackground perlu induk yang punya ukuran pasti buat absoluteFill
+  // (sama pola kayak Dashboard/Diagnostik/Database) - BUG FIX: sebelumnya
+  // cuma ada 1 View "screen" (transparent) yang dipakai buat wrap+scroll
+  // sekaligus, dan ScrollView-nya sendiri gak dikasih `style={screen}` -
+  // defaultnya opaque, nutupin AuroraBackground total (makanya keliatan
+  // putih polos, laporan bug user 5 Agustus 2026).
+  wrap: { flex: 1 },
   screen: { flex: 1, backgroundColor: 'transparent' },
   content: { padding: spacing.lg, paddingBottom: 100, gap: spacing.sm },
   eyebrow: { fontSize: 11, fontWeight: '700', color: colors.inkFaint, letterSpacing: 1 },

@@ -80,7 +80,9 @@ export default function CoolifyEnvScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       {projects.length > 1 && (
-        <View style={styles.chipRow}>
+        <Card>
+          <Text style={styles.label}>Project</Text>
+          <View style={styles.chipRow}>
           {projects.map((p) => (
             <Pressable
               key={p.key}
@@ -93,9 +95,8 @@ export default function CoolifyEnvScreen() {
             </Pressable>
           ))}
         </View>
+        </Card>
       )}
-
-      <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>Lihat (value asli, proses yang jalan)</Text>
         <Pressable onPress={() => envQuery.refetch()}>
           <Ionicons name="refresh" size={18} color={colors.accent} />
@@ -150,6 +151,7 @@ const styles = StyleSheet.create({
   introCard: { backgroundColor: colors.blueSoft, borderColor: colors.blueSoft },
   intro: { fontSize: 12.5, color: colors.inkMuted, lineHeight: 18 },
   mutedText: { fontSize: 13, color: colors.inkMuted },
+  label: { fontSize: 12, fontWeight: '700', color: colors.inkMuted, marginBottom: spacing.sm },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.md },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.inkFaint, marginTop: spacing.md, marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.6 },
   envRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.divider },

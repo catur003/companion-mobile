@@ -95,7 +95,9 @@ export default function CoolifyFileViewerScreen() {
       </Card>
 
       {projects.length > 1 && (
-        <View style={styles.chipRow}>
+        <Card>
+          <Text style={styles.label}>Project</Text>
+          <View style={styles.chipRow}>
           {projects.map((p) => (
             <Pressable
               key={p.key}
@@ -111,7 +113,8 @@ export default function CoolifyFileViewerScreen() {
               </Text>
             </Pressable>
           ))}
-        </View>
+          </View>
+        </Card>
       )}
 
       <View style={styles.pathRow}>
@@ -181,6 +184,7 @@ const styles = StyleSheet.create({
   introCard: { backgroundColor: colors.blueSoft, borderColor: colors.blueSoft },
   intro: { fontSize: 12.5, color: colors.inkMuted, lineHeight: 18 },
   mutedText: { fontSize: 13, color: colors.inkMuted },
+  label: { fontSize: 12, fontWeight: '700', color: colors.inkMuted, marginBottom: spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     paddingVertical: 6,

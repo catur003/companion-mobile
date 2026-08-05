@@ -12,12 +12,12 @@ import { ApiError } from '@/lib/api';
 // User bisa edit/gabung sebelum kirim (mis. tempel "&& npx tsx prisma/seed.ts"
 // abis "push" buat 1x kirim gak 2x redeploy, atau ganti runner seed kalau
 // generate-nya gak cocok sama struktur project).
-const QUICK_FILL: { label: string; command: string; danger?: boolean }[] = [
+const QUICK_FILL: { label: string; command: string; risk?: 'danger' | 'warning' }[] = [
   { label: 'Generate', command: 'npx prisma generate' },
   { label: 'DB Push', command: 'npx prisma db push' },
-  { label: 'DB Push (Force)', command: 'npx prisma db push --accept-data-loss', danger: true },
+  { label: 'DB Push (Force)', command: 'npx prisma db push --accept-data-loss', risk: 'danger' },
   { label: 'Migrate Deploy', command: 'npx prisma migrate deploy' },
-  { label: 'DB Seed', command: 'npx prisma db seed', danger: true },
+  { label: 'DB Seed', command: 'npx prisma db seed', risk: 'warning' },
 ];
 
 /**
@@ -108,7 +108,9 @@ export default function CoolifyMigrateScreen() {
       </Card>
 
       {projects.length > 1 && (
-        <View style={styles.chipRow}>
+        <Card>
+          <Text style={styles.label}>Project</Text>
+          <View style={styles.chipRow}>
           {projects.map((p) => (
             <Pressable
               key={p.key}
@@ -120,14 +122,15 @@ export default function CoolifyMigrateScreen() {
               </Text>
             </Pressable>
           ))}
-        </View>
+          </View>
+        </Card>
       )}
 
       <Card>
         <Text style={styles.label}>Isi Cepat</Text>
         <View style={styles.modeRow}>
           {QUICK_FILL.map((q) => (
-            <Button key={q.label} label={q.label} variant={q.danger ? 'danger' : 'secondary'} onPress={() => quickFill(q.command)} />
+            <Button key={q.label} label={q.label} variant={q.risk ?? 'secondary'} onPress={() => quickFill(q.command)} />
           ))}
           <Button label="Kosongkan" variant="secondary" onPress={() => setCommand('')} />
         </View>

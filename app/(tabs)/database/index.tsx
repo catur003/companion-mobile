@@ -39,9 +39,10 @@ export default function DatabaseListScreen() {
   const databases = data?.databases ?? [];
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.wrap}>
       <AuroraBackground />
       <FlatList
+        style={styles.screen}
         data={databases}
         keyExtractor={(item) => item}
         contentContainerStyle={[styles.content, { paddingTop: topPadding }]}
@@ -136,6 +137,7 @@ export default function DatabaseListScreen() {
 
 const styles = StyleSheet.create({
   // transparent - AuroraBackground dipasang sekali di (tabs)/_layout.tsx.
+  wrap: { flex: 1 },
   screen: { flex: 1, backgroundColor: 'transparent' },
   content: { padding: spacing.lg, paddingBottom: 100 },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.inkFaint, marginBottom: spacing.sm, textTransform: 'uppercase', letterSpacing: 0.6 },

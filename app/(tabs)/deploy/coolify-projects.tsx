@@ -165,11 +165,15 @@ export default function CoolifyProjectMappingScreen() {
                 Server ini punya lebih dari 1 database - WAJIB isi "Nama Database" di bawah biar gak nyasar ke database project lain.
               </Text>
             )}
-            {schemasQuery.data?.map((s) => (
-              <Pressable key={s} onPress={() => setSchemaName(s)} style={styles.schemaSuggestion}>
-                <Text style={styles.schemaSuggestionText}>• {s} (tap buat isi)</Text>
-              </Pressable>
-            ))}
+            {(schemasQuery.data?.length ?? 0) > 0 && (
+              <View style={styles.pickRow}>
+                {schemasQuery.data!.map((s) => (
+                  <Pressable key={s} onPress={() => setSchemaName(s)} style={[styles.pickChip, schemaName === s && styles.pickChipActive]}>
+                    <Text style={[styles.pickChipText, schemaName === s && styles.pickChipTextActive]}>{s}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
             <FormField
               label="Nama Database (kosongin kalau server ini cuma 1 database)"
               placeholder="mis. webdesadb"
@@ -236,8 +240,6 @@ const styles = StyleSheet.create({
   pickChipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   pickChipText: { fontSize: 12, fontWeight: '600', color: colors.inkMuted },
   pickChipTextActive: { color: colors.accent, fontWeight: '700' },
-  schemaSuggestion: { paddingVertical: 3 },
-  schemaSuggestionText: { fontSize: 12, color: colors.accent, fontFamily: 'monospace' },
   entryCard: { paddingVertical: spacing.sm },
   entryRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   entryName: { fontSize: 14, fontWeight: '700', color: colors.ink },
