@@ -9,6 +9,7 @@ import * as SecureStore from 'expo-secure-store';
 
 const KEY_BASE_URL = 'zenvps_base_url';
 const KEY_API_KEY = 'zenvps_api_key';
+const KEY_PUSH_ENABLED = 'zenvps_push_enabled';
 
 export async function getBaseUrl(): Promise<string | null> {
   return SecureStore.getItemAsync(KEY_BASE_URL);
@@ -184,4 +185,20 @@ export async function getThemeName(): Promise<string | null> {
 
 export async function setThemeName(name: string): Promise<void> {
   await SecureStore.setItemAsync(KEY_THEME_NAME, name);
+}
+
+/**
+ * Status toggle notifikasi push (5 Agustus 2026) - preferensi lokal doang,
+ * BUKAN sumber kebenaran (izin OS beneran dicek terpisah lewat
+ * expo-notifications tiap kali). Ini cuma buat inisialisasi posisi toggle
+ * pas layar Setelan dibuka, biar gak keliatan "off" tiap buka app padahal
+ * user udah pernah aktifin.
+ */
+export async function getPushEnabledPref(): Promise<boolean> {
+  const val = await SecureStore.getItemAsync(KEY_PUSH_ENABLED);
+  return val === 'true';
+}
+
+export async function setPushEnabledPref(enabled: boolean): Promise<void> {
+  await SecureStore.setItemAsync(KEY_PUSH_ENABLED, enabled ? 'true' : 'false');
 }

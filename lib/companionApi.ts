@@ -470,6 +470,12 @@ export async function registerPushToken(token: string): Promise<void> {
   await unwrap<void>(c.post('/push-token', { token }));
 }
 
+/** DELETE /push-token - hapus token tersimpan, dipanggil pas toggle notifikasi di-matiin. */
+export async function clearPushToken(): Promise<void> {
+  const c = await companionClient();
+  await unwrap<void>(c.delete('/push-token'));
+}
+
 /**
  * POST /db/migrate - generate command + kirim ke field Post-deployment Coolify
  * lewat PATCH /api/v1/applications/{uuid}. Mode "push_force"/"seed" butuh

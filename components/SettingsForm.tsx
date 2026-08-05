@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Switch, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { FormField } from './FormField';
@@ -23,9 +23,11 @@ import {
   setCoolifyBaseUrl,
   setCoolifyToken,
   clearCoolifyCredentials,
+  getPushEnabledPref,
+  setPushEnabledPref,
 } from '@/lib/storage';
 import { useAuth } from '@/lib/AuthContext';
-import { companionHealthCheck, registerPushToken } from '@/lib/companionApi';
+import { companionHealthCheck, registerPushToken, clearPushToken } from '@/lib/companionApi';
 import { coolifyHealthCheck } from '@/lib/coolifyApi';
 import { requestPushPermissionAndGetToken } from '@/lib/push';
 import { ApiError } from '@/lib/api';
@@ -224,21 +226,35 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
   }
 
   // ---- Push notification - relay webhook Coolify (Bagian belum ada
-  // sebelumnya, ditambah 5 Agustus 2026).
-  async function handleActivatePush() {
+  // sebelumnya, ditambah 5 Agustus 2026). Toggle on/off (bukan tombol
+  // one-shot lagi) - state disimpen lokal cuma buat posisi awal toggle
+  // (lihat catatan di storage.ts:getPushEnabledPref), sumber kebenaran
+  // aslinya tetep izin OS + ada/nggaknya token di VPS.
+  const [pushEnabled, setPushEnabled] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setPushEnabled(await getPushEnabledPref());
+    })();
+  }, []);
+
+  async function handleTogglePush(next: boolean) {
     setPushRegistering(true);
     try {
-      const result = await requestPushPermissionAndGetToken();
-      if (!result.ok || !result.token) {
-        showInfo('error', 'Gagal Aktifkan Notifikasi', result.errorMessage ?? 'Terjadi kesalahan tak terduga.');
-        return;
+      if (next) {
+        const result = await requestPushPermissionAndGetToken();
+        if (!result.ok || !result.token) {
+          showInfo('error', 'Gagal Aktifkan Notifikasi', result.errorMessage ?? 'Terjadi kesalahan tak terduga.');
+          return; // toggle TETAP di posisi lama (gak keubah) - lihat finally di bawah
+        }
+        await registerPushToken(result.token);
+        await setPushEnabledPref(true);
+        setPushEnabled(true);
+      } else {
+        await clearPushToken();
+        await setPushEnabledPref(false);
+        setPushEnabled(false);
       }
-      await registerPushToken(result.token);
-      showInfo(
-        'success',
-        'Notifikasi Aktif',
-        'Push token tersimpan di VPS. Notifikasi bakal masuk kalau webhook Coolify udah disetel ngarah ke Companion API (lihat .env.example: COOLIFY_WEBHOOK_SECRET).'
-      );
     } catch (err) {
       showInfo('error', 'Gagal', err instanceof ApiError ? err.message : 'Terjadi kesalahan tak terduga.');
     } finally {
@@ -374,7 +390,18 @@ export function SettingsForm({ variant = 'modal' }: SettingsFormProps) {
         </Text>
       </Card>
       <Card>
-        <Button label="Aktifkan Notifikasi Push" loading={pushRegistering} onPress={handleActivatePush} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={styles.rowTitle}>Notifikasi Push</Text>
+          {pushRegistering ? (
+            <ActivityIndicator size="small" color={colors.accent} />
+          ) : (
+            <Switch
+              value={pushEnabled}
+              onValueChange={handleTogglePush}
+              trackColor={{ false: colors.divider, true: colors.accent }}
+            />
+          )}
+        </View>
       </Card>
 
       <Text style={styles.sectionTitle}>Tentang</Text>

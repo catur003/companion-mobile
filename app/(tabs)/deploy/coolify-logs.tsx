@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Pressable, FlatList, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { colors, spacing, radius } from '@/lib/theme';
@@ -160,7 +162,7 @@ export default function CoolifyLogsScreen() {
   const isBuildSuccess = buildStatus === 'finished';
 
   // ---- Auto-scroll cuma kalau user lagi di bawah, gak maksa kalau lagi baca history ----
-  const listRef = useRef<FlatList>(null);
+  const listRef = useRef<ScrollView>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
 
   function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
@@ -179,6 +181,53 @@ export default function CoolifyLogsScreen() {
   function jumpToLatest() {
     listRef.current?.scrollToEnd({ animated: true });
     setIsNearBottom(true);
+  }
+
+  // BARU (5 Agustus 2026) - Download Log. Pakai `expo-file-system/legacy`
+  // (bukan `expo-file-system` biasa) - SDK 54 udah pindah ke API baru
+  // (File/Directory class), tapi belum kesempatan verifikasi live apakah
+  // path "/legacy" ini beneran ke-export persis kayak API lama
+  // (writeAsStringAsync dkk) - WAJIB DITES sekali abis rebuild, sebelum
+  // dianggap final.
+  async function handleDownloadLog() {
+    const text = visibleSteps.map((s) => s.output).join('\n');
+    if (!text) {
+      Alert.alert('Kosong', 'Belum ada log buat di-download.');
+      return;
+    }
+    const safeName = (selectedProject?.key ?? 'app').replace(/[^a-z0-9-]/gi, '-');
+    const filename = `deploy-log-${safeName}-${Date.now()}.txt`;
+    const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+    try {
+      await FileSystem.writeAsStringAsync(fileUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Simpan/Bagikan Log' });
+      } else {
+        Alert.alert('Tersimpan', `Log disimpan sementara di:\n${fileUri}`);
+      }
+    } catch (err) {
+      Alert.alert('Gagal', err instanceof Error ? err.message : 'Gagal simpan log ke file.');
+    }
+  }
+
+  async function handleDownloadRuntimeLog() {
+    const text = runtimeQuery.data;
+    if (!text) return;
+    const safeName = (selectedProject?.key ?? 'app').replace(/[^a-z0-9-]/gi, '-');
+    const filename = `runtime-log-${safeName}-${Date.now()}.txt`;
+    const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+    try {
+      await FileSystem.writeAsStringAsync(fileUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Simpan/Bagikan Log' });
+      } else {
+        Alert.alert('Tersimpan', `Log disimpan sementara di:\n${fileUri}`);
+      }
+    } catch (err) {
+      Alert.alert('Gagal', err instanceof Error ? err.message : 'Gagal simpan log ke file.');
+    }
   }
 
   if (projectsQuery.isLoading) {
@@ -253,34 +302,46 @@ export default function CoolifyLogsScreen() {
                     : `${buildStatus}${isBuildActive ? ' · polling tiap 2 detik' : ''}`}
               </Text>
             </View>
+            <Pressable onPress={handleDownloadLog} style={{ marginLeft: spacing.sm }}>
+              <Ionicons name="download-outline" size={18} color={colors.inkMuted} />
+            </Pressable>
             <Pressable onPress={() => setShowHidden((v) => !v)}>
               <Text style={styles.toggleHiddenText}>{showHidden ? 'Sembunyikan detail' : 'Tampilkan detail'}</Text>
             </Pressable>
           </View>
 
           <View style={{ flex: 1 }}>
-            <FlatList
+            <ScrollView
               ref={listRef}
-              data={visibleSteps}
-              keyExtractor={(_, i) => String(i)}
               contentContainerStyle={styles.logContent}
               onScroll={handleScroll}
               scrollEventThrottle={100}
-              renderItem={({ item }) => (
-                <Text selectable style={[styles.logLine, item.type === 'stderr' && styles.logLineErr]}>
-                  {item.output}
+            >
+              {visibleSteps.length > 0 ? (
+                // Satu <Text> ROOT, semua baris jadi <Text> NESTED di dalamnya
+                // (bukan FlatList per-item lagi) - biar drag-select bisa bebas
+                // sepanjang apa aja, gak kepotong per-baris. Warna stderr tetap
+                // kepertahanin lewat style di tiap nested <Text>.
+                <Text selectable style={styles.logLine}>
+                  {visibleSteps.map((item, i) => (
+                    <Text key={i} style={item.type === 'stderr' ? styles.logLineErr : undefined}>
+                      {item.output}
+                      {'\n'}
+                    </Text>
+                  ))}
                 </Text>
-              )}
-              ListEmptyComponent={
-                !activeSearchQuery.isLoading && !historyQuery.isLoading && !trackedDeploymentUuid ? (
-                  <Card style={{ margin: spacing.lg }}>
+              ) : (
+                !activeSearchQuery.isLoading &&
+                !historyQuery.isLoading &&
+                !trackedDeploymentUuid && (
+                  <Card>
                     <Text style={styles.mutedText}>
                       Trigger Start/Deploy/Restart (dari app atau dashboard Coolify) buat lihat log build-nya di sini.
                     </Text>
                   </Card>
-                ) : null
-              }
-            />
+                )
+              )}
+            </ScrollView>
             {!isNearBottom && visibleSteps.length > 0 && (
               <Pressable style={styles.jumpBtn} onPress={jumpToLatest}>
                 <Ionicons name="arrow-down-circle" size={16} color={colors.onAccent} />
@@ -298,7 +359,14 @@ export default function CoolifyLogsScreen() {
             </Text>
           </Card>
           <Card>
-            <Text style={styles.projectLabel}>{selectedProject?.name ?? '-'}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.projectLabel}>{selectedProject?.name ?? '-'}</Text>
+              {runtimeQuery.data ? (
+                <Pressable onPress={handleDownloadRuntimeLog}>
+                  <Ionicons name="download-outline" size={18} color={colors.inkMuted} />
+                </Pressable>
+              ) : null}
+            </View>
             {runtimeQuery.isLoading && <Text style={styles.mutedText}>Memuat...</Text>}
             {runtimeQuery.isError && (
               <Text style={[styles.mutedText, { color: colors.red }]}>Gagal ambil log: {(runtimeQuery.error as Error)?.message}</Text>
