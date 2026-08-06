@@ -313,6 +313,8 @@ export interface RegisteredCoolifyProject {
   databaseUuid?: string;
   /** BARU (4 Agustus 2026): diisi kalau databaseUuid ini "numpang" 1 server MySQL bareng project lain (bukan schema default Coolify) - WAJIB diisi kalau numpang, biar query/browse gak nyasar ke schema project lain. */
   schemaName?: string;
+  /** BARU (6 Agustus 2026): 'nextjs' | 'laravel' - nentuin mode migrate & fitur khusus (key:generate) apa yang muncul di UI. Project lama tanpa field ini dianggap 'nextjs' (server-side default, lihat projects.js). */
+  type?: 'nextjs' | 'laravel';
 }
 
 /**
@@ -346,6 +348,20 @@ export async function deleteRegisteredProject(key: string): Promise<RegisteredCo
   const c = await companionClient();
   const result = await unwrap<{ projects: RegisteredCoolifyProject[] }>(c.delete(`/projects/${encodeURIComponent(key)}`));
   return result.projects;
+}
+
+/**
+ * POST /laravel/generate-key - `php artisan key:generate --show` di container
+ * yang lagi jalan. CUMA nge-print, GAK NULIS apa-apa (aman diulang). Nge-SET
+ * hasilnya jadi APP_KEY beneran itu langkah TERPISAH lewat
+ * setCoolifyApplicationEnvsBulk (coolifyApi.ts) - JANGAN digabung jadi 1
+ * langkah, biar user sadar dulu sebelum nimpa APP_KEY app yang udah jalan
+ * (ganti APP_KEY = semua session/cookie/data terenkripsi lama rusak).
+ */
+export async function generateLaravelKey(applicationUuid: string): Promise<string> {
+  const c = await companionClient();
+  const result = await unwrap<{ key: string }>(c.post('/laravel/generate-key', { applicationUuid }));
+  return result.key;
 }
 
 /**

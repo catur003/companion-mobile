@@ -36,6 +36,7 @@ export default function CoolifyProjectMappingScreen() {
   const [applicationUuid, setApplicationUuid] = useState<string | undefined>();
   const [databaseUuid, setDatabaseUuid] = useState<string | undefined>();
   const [schemaName, setSchemaName] = useState('');
+  const [type, setType] = useState<'nextjs' | 'laravel'>('nextjs');
 
   const schemasQuery = useQuery({
     queryKey: ['coolify-schemas', databaseUuid],
@@ -50,6 +51,7 @@ export default function CoolifyProjectMappingScreen() {
     setApplicationUuid(undefined);
     setDatabaseUuid(undefined);
     setSchemaName('');
+    setType('nextjs');
   }
 
   function startEdit(entry: RegisteredCoolifyProject) {
@@ -59,6 +61,7 @@ export default function CoolifyProjectMappingScreen() {
     setApplicationUuid(entry.applicationUuid);
     setDatabaseUuid(entry.databaseUuid);
     setSchemaName(entry.schemaName ?? '');
+    setType(entry.type === 'laravel' ? 'laravel' : 'nextjs');
   }
 
   const saveMutation = useMutation({
@@ -72,6 +75,7 @@ export default function CoolifyProjectMappingScreen() {
         applicationUuid,
         databaseUuid,
         schemaName: schemaName.trim() || undefined,
+        type,
       });
     },
     onSuccess: () => {
@@ -123,6 +127,18 @@ export default function CoolifyProjectMappingScreen() {
           editable={!editingKey}
         />
         <FormField label="Nama Tampilan Project" placeholder="Web Desa" value={name} onChangeText={setName} />
+
+        <Text style={styles.label}>Tipe Project</Text>
+        <View style={styles.chipRow}>
+          <Pressable onPress={() => setType('nextjs')} style={[styles.chip, type === 'nextjs' && styles.chipActive]}>
+            <Text style={[styles.chipText, type === 'nextjs' && styles.chipTextActive]}>Next.js / Prisma</Text>
+          </Pressable>
+          <Pressable onPress={() => setType('laravel')} style={[styles.chip, type === 'laravel' && styles.chipActive]}>
+            <Text style={[styles.chipText, type === 'laravel' && styles.chipTextActive]}>Laravel</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.hint}>Nentuin pilihan Isi Cepat di layar Migrate & fitur khusus (APP_KEY) buat Laravel.</Text>
+
 
         <Text style={styles.label}>Application</Text>
         {appsQuery.isLoading && <Text style={styles.mutedText}>Memuat daftar application...</Text>}
@@ -235,6 +251,19 @@ const styles = StyleSheet.create({
   mutedText: { fontSize: 12.5, color: colors.inkMuted },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: colors.inkFaint, marginTop: spacing.md, marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.6 },
   label: { fontSize: 12, fontWeight: '700', color: colors.inkMuted, marginBottom: spacing.sm },
+  hint: { fontSize: 11, color: colors.inkFaint, marginTop: -spacing.xs, marginBottom: spacing.sm, lineHeight: 15 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
+  chip: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    backgroundColor: colors.card,
+  },
+  chipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  chipText: { fontSize: 12.5, fontWeight: '700', color: colors.inkMuted },
+  chipTextActive: { color: colors.accent },
   pickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   pickChip: {
     maxWidth: 200,
