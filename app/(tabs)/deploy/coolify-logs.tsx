@@ -15,7 +15,7 @@ import {
   getDeploymentDetail,
   DeploymentLogStep,
 } from '@/lib/coolifyApi';
-import { listRegisteredProjects } from '@/lib/companionApi';
+import { listRegisteredProjects, readContainerFile } from '@/lib/companionApi';
 
 const ACTIVE_STATUSES = ['in_progress', 'queued'];
 const NEAR_BOTTOM_THRESHOLD = 60;
@@ -64,6 +64,26 @@ export default function CoolifyLogsScreen() {
     enabled: Boolean(selectedProject) && activeTab === 'runtime',
     refetchInterval: 2000,
   });
+
+  // BARU (6 Agustus 2026) - Laravel nulis error ke FILE (storage/logs/laravel.log),
+  // BUKAN stdout/stderr container - makanya runtimeQuery di atas (baca stdout
+  // via getCoolifyApplicationLogs) GAK PERNAH nangkep error 500 Laravel (kejadian
+  // nyata: kasus 500 kemarin gak nongol sama sekali di situ). On-demand doang
+  // (bukan auto-poll kayak runtime log) - file bisa gede & gak perlu di-refresh
+  // tiap 2 detik kayak stdout.
+  const isLaravel = selectedProject?.type === 'laravel';
+  const [showLaravelLog, setShowLaravelLog] = useState(false);
+  const laravelLogQuery = useQuery({
+    queryKey: ['laravel-log-file', selectedProject?.applicationUuid],
+    queryFn: () => readContainerFile(selectedProject!.applicationUuid, 'storage/logs/laravel.log'),
+    enabled: Boolean(selectedProject) && activeTab === 'runtime' && isLaravel && showLaravelLog,
+  });
+  // Tampilin cuma ~8000 karakter TERAKHIR (baris error paling baru ada di
+  // bawah file) - biar gak bikin layar berat kalau file udah gede. Tombol
+  // Download tetep ngirim FULL CONTENT, bukan yang udah dipotong ini.
+  const laravelLogPreview = laravelLogQuery.data?.content
+    ? laravelLogQuery.data.content.slice(-8000)
+    : null;
 
   // ---- Build log - sticky tracking ----
   // FIX (5 Agustus 2026, bug nyata: log ilang cuma tutup-buka layar, BUKAN
@@ -230,6 +250,25 @@ export default function CoolifyLogsScreen() {
     }
   }
 
+  async function handleDownloadLaravelLog() {
+    const text = laravelLogQuery.data?.content;
+    if (!text) return;
+    const safeName = (selectedProject?.key ?? 'app').replace(/[^a-z0-9-]/gi, '-');
+    const filename = `laravel-log-${safeName}-${Date.now()}.txt`;
+    const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+    try {
+      await FileSystem.writeAsStringAsync(fileUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/plain', dialogTitle: 'Simpan/Bagikan Log Laravel' });
+      } else {
+        Alert.alert('Tersimpan', `Log disimpan sementara di:\n${fileUri}`);
+      }
+    } catch (err) {
+      Alert.alert('Gagal', err instanceof Error ? err.message : 'Gagal simpan log ke file.');
+    }
+  }
+
   if (projectsQuery.isLoading) {
     return (
       <View style={styles.screen}>
@@ -381,6 +420,43 @@ export default function CoolifyLogsScreen() {
               </ScrollView>
             </Card>
           )}
+
+          {isLaravel && (
+            <Card>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={styles.projectLabel}>Log Laravel (storage/logs/laravel.log)</Text>
+                {laravelLogQuery.data && (
+                  <Pressable onPress={handleDownloadLaravelLog}>
+                    <Ionicons name="download-outline" size={18} color={colors.inkMuted} />
+                  </Pressable>
+                )}
+              </View>
+              <Text style={styles.subtextLog}>
+                Error 500 & exception Laravel nulis ke sini, BUKAN ke runtime log di atas (yang cuma nangkep stdout).
+              </Text>
+              {!showLaravelLog && (
+                <Button label="Buka Log Laravel" variant="secondary" onPress={() => setShowLaravelLog(true)} />
+              )}
+              {showLaravelLog && (
+                <>
+                  {laravelLogQuery.isLoading && <Text style={styles.mutedText}>Memuat...</Text>}
+                  {laravelLogQuery.isError && (
+                    <Text style={[styles.mutedText, { color: colors.red }]}>
+                      Gagal ambil file: {(laravelLogQuery.error as Error)?.message}
+                    </Text>
+                  )}
+                  {laravelLogPreview && (
+                    <ScrollView horizontal>
+                      <Text selectable style={styles.code}>
+                        {laravelLogPreview}
+                      </Text>
+                    </ScrollView>
+                  )}
+                  <Button label="Refresh" variant="secondary" onPress={() => laravelLogQuery.refetch()} />
+                </>
+              )}
+            </Card>
+          )}
         </ScrollView>
       )}
     </View>
@@ -394,6 +470,7 @@ const styles = StyleSheet.create({
   intro: { fontSize: 12.5, color: colors.inkMuted, lineHeight: 18 },
   mutedText: { fontSize: 13, color: colors.inkMuted },
   projectLabel: { fontSize: 13, fontWeight: '700', color: colors.ink, marginBottom: spacing.sm },
+  subtextLog: { fontSize: 11, color: colors.inkFaint, marginBottom: spacing.sm, lineHeight: 15 },
   code: { fontFamily: 'monospace', fontSize: 11, color: colors.ink, lineHeight: 16 },
   tabRow: { flexDirection: 'row', backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.divider },
   tab: { flex: 1, paddingVertical: 13, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },

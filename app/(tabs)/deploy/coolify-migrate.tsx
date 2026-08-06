@@ -6,7 +6,7 @@ import { Button } from '@/components/Button';
 import { FormField } from '@/components/FormField';
 import { colors, spacing, radius } from '@/lib/theme';
 import { runCompanionDbMigrate, listRegisteredProjects, generateLaravelKey } from '@/lib/companionApi';
-import { setCoolifyApplicationEnvsBulk, restartCoolifyApplication } from '@/lib/coolifyApi';
+import { setCoolifyApplicationEnvsBulk, restartCoolifyApplication, getCoolifyApplication } from '@/lib/coolifyApi';
 import { ApiError } from '@/lib/api';
 
 // Tombol "isi otomatis" - ngisi textarea command, BUKAN langsung kirim.
@@ -28,7 +28,7 @@ const QUICK_FILL_NEXTJS: { label: string; command: string; risk?: 'danger' | 'wa
 const QUICK_FILL_LARAVEL: { label: string; command: string; risk?: 'danger' | 'warning' }[] = [
   { label: 'Migrate', command: 'php artisan migrate' },
   { label: 'Migrate (Force)', command: 'php artisan migrate --force', risk: 'danger' },
-  { label: 'DB Seed', command: 'php artisan db:seed', risk: 'warning' },
+  { label: 'DB Seed', command: 'php artisan db:seed --force', risk: 'warning' },
   { label: 'Config Cache', command: 'php artisan config:cache' },
   { label: 'Route Cache', command: 'php artisan route:cache' },
   { label: 'Optimize Clear', command: 'php artisan optimize:clear' },
@@ -60,6 +60,18 @@ export default function CoolifyMigrateScreen() {
 
   const [command, setCommand] = useState(DEFAULT_COMMAND.nextjs);
   const [lastSent, setLastSent] = useState<string | null>(null);
+
+  // BARU (6 Agustus 2026) - fetch command yang LAGI AKTIF di Coolify sekarang
+  // (field post_deployment_command, udah confirmed namanya dari PATCH yang
+  // dipakai sendMutation). Textarea sebelumnya SELALU kosong tiap buka
+  // layar - user gak pernah tau apa yang beneran ke-set tanpa buka dashboard
+  // browser dulu.
+  const currentAppQuery = useQuery({
+    queryKey: ['coolify-application', selectedProject?.applicationUuid],
+    queryFn: () => getCoolifyApplication(selectedProject!.applicationUuid),
+    enabled: Boolean(selectedProject),
+  });
+  const currentPostDeployCommand = (currentAppQuery.data?.post_deployment_command as string | null | undefined) ?? null;
 
   // Ganti default command pas pindah project BEDA TIPE - biar gak kejadian
   // user pindah dari project Next.js ke Laravel tapi textarea masih keisi
@@ -157,6 +169,26 @@ export default function CoolifyMigrateScreen() {
           </View>
         </Card>
       )}
+
+      <Card>
+        <Text style={styles.label}>Command Aktif Sekarang di Coolify</Text>
+        {currentAppQuery.isLoading && <Text style={styles.mutedText}>Memuat...</Text>}
+        {currentAppQuery.isError && <Text style={[styles.mutedText, { color: colors.red }]}>Gagal ambil data app.</Text>}
+        {!currentAppQuery.isLoading && !currentAppQuery.isError && (
+          <>
+            <Text style={styles.code} selectable>
+              {currentPostDeployCommand || '(kosong - belum pernah di-set)'}
+            </Text>
+            {currentPostDeployCommand && (
+              <Button
+                label="Muat ke Editor"
+                variant="secondary"
+                onPress={() => setCommand(currentPostDeployCommand)}
+              />
+            )}
+          </>
+        )}
+      </Card>
 
       <Card>
         <Text style={styles.label}>Isi Cepat {isLaravel ? '(Laravel)' : '(Next.js/Prisma)'}</Text>
