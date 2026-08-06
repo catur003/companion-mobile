@@ -18,6 +18,7 @@ const ACTION_LABELS: Record<string, string> = {
   'db:reset-password': 'Reset password database',
   'db:list-schemas': 'Lihat daftar schema database',
   'db:create-schema': 'Buat schema database baru',
+  'db:drop-schema': 'Hapus schema database',
   'db:import': 'Import dump database',
   'db:export': 'Export dump database',
   'db:migrate:generate': 'Generate migrasi Prisma',
